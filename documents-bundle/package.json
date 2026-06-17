@@ -1,0 +1,38 @@
+{
+  "name": "documents-bundle",
+  "version": "0.1.0",
+  "description": "An Obsidian plugin for self-contained Markdown document bundles.",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "package:release": "node scripts/package-release.mjs",
+    "prepare:test-vault": "node scripts/prepare-test-vault.mjs",
+    "smoke:obsidian": "npm run build && npm run prepare:test-vault && node scripts/obsidian-smoke-test.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -noEmit -skipLibCheck",
+    "validate:docs": "node scripts/validate-docs.mjs",
+    "validate:mobile-safety": "npm run build && node scripts/validate-mobile-safety.mjs",
+    "validate:release": "npm run build && node scripts/validate-release.mjs",
+    "verify": "npm test && npm run smoke:obsidian && npm run validate:release && npm run validate:mobile-safety && npm run validate:docs && npm audit --audit-level=high && npm run package:release"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "documents",
+    "bundle",
+    "attachments"
+  ],
+  "author": "kq996",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.28.1",
+    "obsidian": "^1.8.7",
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.9"
+  }
+}

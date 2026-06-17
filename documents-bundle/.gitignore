@@ -1,0 +1,4 @@
+node_modules/
+dist/
+test-vault/
+.tmp-obsidian-user-data*/
