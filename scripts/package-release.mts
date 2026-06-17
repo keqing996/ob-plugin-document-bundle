@@ -1,6 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import type { SpawnSyncReturns } from "node:child_process";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const distRoot = resolve(projectRoot, "dist");
@@ -46,7 +47,12 @@ console.log(JSON.stringify({
   files: archivedFiles
 }, null, 2));
 
-async function readCommand(command, args, { cwd, action }) {
+type CommandContext = {
+  cwd: string;
+  action: string;
+};
+
+async function readCommand(command: string, args: string[], { cwd, action }: CommandContext): Promise<string> {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8"
@@ -58,7 +64,7 @@ async function readCommand(command, args, { cwd, action }) {
   throw commandError(command, args, action, result);
 }
 
-function run(command, args, { cwd, action }) {
+function run(command: string, args: string[], { cwd, action }: CommandContext): void {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
@@ -69,7 +75,7 @@ function run(command, args, { cwd, action }) {
   }
 }
 
-function commandError(command, args, action, result) {
+function commandError(command: string, args: string[], action: string, result: SpawnSyncReturns<string>): Error {
   const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
   return new Error(`Command failed while trying to ${action}: ${command} ${args.join(" ")}\n${output}`);
 }

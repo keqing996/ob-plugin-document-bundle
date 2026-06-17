@@ -11,6 +11,17 @@ const port = Number(process.env.OBSIDIAN_REMOTE_DEBUGGING_PORT ?? String(9300 + 
 const obsidianApp = process.env.OBSIDIAN_APP_PATH ?? "/Applications/Obsidian.app";
 const obsidianExecutable = process.env.OBSIDIAN_EXECUTABLE ?? "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
 
+type DevToolsPage = {
+  type: string;
+  url: string;
+  webSocketDebuggerUrl: string;
+};
+
+type DevToolsClient = {
+  ws: WebSocket;
+  send(method: string, params?: Record<string, unknown>): Promise<any>;
+};
+
 if (typeof WebSocket !== "function") {
   throw new Error("This smoke test requires a Node.js runtime with global WebSocket support.");
 }
@@ -35,7 +46,7 @@ try {
   await terminateTestObsidian();
 }
 
-async function prepareIsolatedUserData() {
+async function prepareIsolatedUserData(): Promise<void> {
   await removeWithRetry(userDataDir);
   await mkdir(userDataDir, { recursive: true });
   await writeFile(
@@ -53,7 +64,7 @@ async function prepareIsolatedUserData() {
   await writeFile(resolve(userDataDir, `${vaultId}.json`), JSON.stringify({}, null, 2));
 }
 
-async function launchObsidian() {
+async function launchObsidian(): Promise<void> {
   const args = [
     `--user-data-dir=${userDataDir}`,
     `--remote-debugging-port=${port}`,
@@ -77,10 +88,10 @@ async function launchObsidian() {
   });
 }
 
-async function waitForObsidianPage() {
+async function waitForObsidianPage(): Promise<DevToolsPage> {
   for (let index = 0; index < 160; index += 1) {
     try {
-      const pages = await fetch(`http://127.0.0.1:${port}/json/list`).then((response) => response.json());
+      const pages = await fetch(`http://127.0.0.1:${port}/json/list`).then((response): Promise<DevToolsPage[]> => response.json());
       const page = pages.find((entry) => entry.type === "page" && entry.url.startsWith("app://obsidian.md"));
       if (page) {
         return page;
@@ -94,19 +105,25 @@ async function waitForObsidianPage() {
   throw new Error("Obsidian DevTools page not found.");
 }
 
-function connectDevTools(webSocketDebuggerUrl) {
+function connectDevTools(webSocketDebuggerUrl: string): Promise<DevToolsClient> {
   const ws = new WebSocket(webSocketDebuggerUrl);
   let nextId = 1;
-  const pending = new Map();
+  const pending = new Map<number, {
+    resolve(value: any): void;
+    reject(reason?: unknown): void;
+  }>();
 
   ws.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
+    const message = JSON.parse(String(event.data));
     if (!message.id || !pending.has(message.id)) {
       return;
     }
 
     const callbacks = pending.get(message.id);
     pending.delete(message.id);
+    if (!callbacks) {
+      return;
+    }
     if (message.error) {
       callbacks.reject(new Error(JSON.stringify(message.error)));
     } else {
@@ -114,11 +131,11 @@ function connectDevTools(webSocketDebuggerUrl) {
     }
   });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<DevToolsClient>((resolve, reject) => {
     ws.addEventListener("open", () => {
       resolve({
         ws,
-        send(method, params = {}) {
+        send(method: string, params: Record<string, unknown> = {}) {
           const id = nextId;
           nextId += 1;
           ws.send(JSON.stringify({ id, method, params }));
@@ -130,7 +147,7 @@ function connectDevTools(webSocketDebuggerUrl) {
   });
 }
 
-async function evaluate(client, expression) {
+async function evaluate(client: DevToolsClient, expression: string): Promise<any> {
   const result = await client.send("Runtime.evaluate", {
     expression,
     awaitPromise: true,
@@ -144,7 +161,7 @@ async function evaluate(client, expression) {
   return result.result.value;
 }
 
-async function waitForPluginCommand(client) {
+async function waitForPluginCommand(client: DevToolsClient): Promise<void> {
   let lastState = null;
   for (let index = 0; index < 80; index += 1) {
     const state = await evaluate(client, `(() => {
@@ -173,7 +190,7 @@ async function waitForPluginCommand(client) {
   throw new Error(`Documents Bundle plugin did not load cleanly. Last state: ${JSON.stringify(lastState)}`);
 }
 
-async function verifyPlugin(client) {
+async function verifyPlugin(client: DevToolsClient): Promise<any> {
   const result = await evaluate(client, `(async () => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const assert = (condition, message) => {
@@ -521,8 +538,8 @@ async function verifyPlugin(client) {
   assert(result.bundleQuickSwitcher.items.includes("Existing Bundle"), "Bundle quick switcher list did not include Existing Bundle.");
   assert(result.bundleQuickSwitcher.items.includes("Shared Attachment/Alpha"), "Bundle quick switcher list did not include nested Alpha bundle.");
   assert(result.bundleQuickSwitcher.modalVisible, "Open bundle document command did not show bundle suggestions.");
-  assert(result.bundleQuickSwitcher.suggestions.some((text) => text.includes("Existing Bundle")), "Bundle quick switcher modal did not render Existing Bundle.");
-  assert(!result.bundleQuickSwitcher.suggestions.some((text) => text.includes("assets")), "Bundle quick switcher modal exposed assets folders.");
+  assert(result.bundleQuickSwitcher.suggestions.some((text: string) => text.includes("Existing Bundle")), "Bundle quick switcher modal did not render Existing Bundle.");
+  assert(!result.bundleQuickSwitcher.suggestions.some((text: string) => text.includes("assets")), "Bundle quick switcher modal exposed assets folders.");
   assert(result.bundleQuickSwitcher.openedAlpha, "Bundle quick switcher open path did not open Alpha bundle main file.");
   assert(result.operations.postMutationScan.bundles === 10, `Expected 10 bundles after normal-note conversions, repair, and conversion operations, got ${result.operations.postMutationScan.bundles}.`);
   assert(result.operations.postMutationScan.markdownFiles === 2, `Expected 2 normal markdown files after normal-note conversions, got ${result.operations.postMutationScan.markdownFiles}.`);
@@ -531,17 +548,17 @@ async function verifyPlugin(client) {
   return result;
 }
 
-function assert(condition, message) {
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
   }
 }
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function terminateTestObsidian() {
+async function terminateTestObsidian(): Promise<void> {
   spawnSync("pkill", ["-f", `remote-debugging-port=${port}`], {
     stdio: "ignore"
   });
@@ -552,7 +569,7 @@ async function terminateTestObsidian() {
   await removeWithRetry(userDataDir);
 }
 
-async function removeWithRetry(path) {
+async function removeWithRetry(path: string): Promise<void> {
   for (let index = 0; index < 20; index += 1) {
     try {
       await rm(path, { force: true, recursive: true });

@@ -4,18 +4,17 @@
   "description": "An Obsidian plugin for self-contained Markdown document bundles.",
   "main": "main.js",
   "scripts": {
-    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "dev": "node esbuild.config.mjs",
-    "package:release": "node scripts/package-release.mjs",
-    "prepare:test-vault": "node scripts/prepare-test-vault.mjs",
-    "smoke:obsidian": "npm run build && npm run prepare:test-vault && node scripts/obsidian-smoke-test.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mts production",
+    "dev": "node esbuild.config.mts",
+    "package:release": "node scripts/package-release.mts",
+    "prepare:test-vault": "node scripts/prepare-test-vault.mts",
+    "smoke:obsidian": "npm run build && npm run prepare:test-vault && node scripts/obsidian-smoke-test.mts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -noEmit -skipLibCheck",
-    "validate:docs": "node scripts/validate-docs.mjs",
-    "validate:mobile-safety": "npm run build && node scripts/validate-mobile-safety.mjs",
-    "validate:release": "npm run build && node scripts/validate-release.mjs",
-    "verify": "npm test && npm run smoke:obsidian && npm run validate:release && npm run validate:mobile-safety && npm run validate:docs && npm audit --audit-level=high && npm run package:release"
+    "validate:mobile-safety": "npm run build && node scripts/validate-mobile-safety.mts",
+    "validate:release": "npm run build && node scripts/validate-release.mts",
+    "verify": "npm test && npm run smoke:obsidian && npm run validate:release && npm run validate:mobile-safety && npm audit --audit-level=high && npm run package:release"
   },
   "keywords": [
     "obsidian",

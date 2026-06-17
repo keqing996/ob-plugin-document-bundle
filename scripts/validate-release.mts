@@ -2,8 +2,8 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const projectRoot = resolve(import.meta.dirname, "..");
-const requiredArtifacts = ["main.js", "manifest.json", "styles.css"];
-const minimumArtifactSizes = {
+const requiredArtifacts = ["main.js", "manifest.json", "styles.css"] as const;
+const minimumArtifactSizes: Record<(typeof requiredArtifacts)[number], number> = {
   "main.js": 1024,
   "manifest.json": 64,
   "styles.css": 64
@@ -12,7 +12,11 @@ const minimumArtifactSizes = {
 const manifest = await readJson("manifest.json");
 const pkg = await readJson("package.json");
 const packageLock = await readJson("package-lock.json");
-const artifactStats = {};
+const artifactStats: Record<(typeof requiredArtifacts)[number], number> = {
+  "main.js": 0,
+  "manifest.json": 0,
+  "styles.css": 0
+};
 
 for (const artifact of requiredArtifacts) {
   const artifactPath = resolve(projectRoot, artifact);
@@ -83,11 +87,11 @@ console.log(JSON.stringify({
   artifacts: artifactStats
 }, null, 2));
 
-async function readJson(relativePath) {
+async function readJson(relativePath: string): Promise<Record<string, any>> {
   return JSON.parse(await readFile(resolve(projectRoot, relativePath), "utf8"));
 }
 
-function assertEqual(actual, expected, message) {
+function assertEqual(actual: unknown, expected: unknown, message: string): void {
   if (actual !== expected) {
     throw new Error(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
   }

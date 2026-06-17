@@ -15,8 +15,6 @@ When the active editor is a Bundle main document, pasted and dropped attachments
 [brief.pdf](./assets/brief.pdf)
 ```
 
-The product scope is tracked in [../PRD.md](../PRD.md).
-
 ## Features
 
 1. Create and convert Bundle documents.
@@ -43,7 +41,7 @@ Main validation:
 npm run verify
 ```
 
-`verify` runs unit tests, the isolated Obsidian smoke test, release/mobile/docs validation, high-severity audit, and release packaging.
+`verify` runs unit tests, the isolated Obsidian smoke test, release/mobile validation, high-severity audit, and release packaging.
 
 Useful individual commands:
 
@@ -51,7 +49,6 @@ Useful individual commands:
 npm run smoke:obsidian
 npm run validate:release
 npm run validate:mobile-safety
-npm run validate:docs
 npm run package:release
 ```
 

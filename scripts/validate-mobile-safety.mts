@@ -63,21 +63,21 @@ console.log(JSON.stringify({
   }
 }, null, 2));
 
-async function readJson(relativePath) {
+async function readJson(relativePath: string): Promise<Record<string, any>> {
   return JSON.parse(await readText(relativePath));
 }
 
-async function readText(relativePath) {
+async function readText(relativePath: string): Promise<string> {
   return readFile(resolve(projectRoot, relativePath), "utf8");
 }
 
-function assertIncludes(source, needle, message) {
+function assertIncludes(source: string, needle: string, message: string): void {
   if (!source.includes(needle)) {
     throw new Error(message);
   }
 }
 
-function assertDoesNotMatch(source, pattern, message) {
+function assertDoesNotMatch(source: string, pattern: RegExp, message: string): void {
   if (pattern.test(source)) {
     throw new Error(message);
   }
