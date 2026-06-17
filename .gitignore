@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
-documents-bundle/test-vault/
 .DS_Store
 *.log
+test-vault/
+.tmp-obsidian-user-data*/

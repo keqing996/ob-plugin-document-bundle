@@ -6,7 +6,7 @@ import type { BundleInfo } from "../types";
 export class BundleSuggestModal extends FuzzySuggestModal<BundleInfo> {
   constructor(private readonly plugin: DocumentsBundlePlugin) {
     super(plugin.app);
-    this.setPlaceholder("Open bundle document...");
+    this.setPlaceholder(this.plugin.t("suggest.openBundleDocument.placeholder"));
   }
 
   getItems(): BundleInfo[] {

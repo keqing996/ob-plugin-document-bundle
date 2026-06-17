@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const repoRoot = resolve(import.meta.dirname, "..", "..");
-const projectRoot = resolve(repoRoot, "documents-bundle");
+const repoRoot = resolve(import.meta.dirname, "..");
+const projectRoot = repoRoot;
 
 const pkg = JSON.parse(await readProjectFile("package.json"));
 const prd = await readRepoFile("PRD.md");
@@ -54,7 +54,8 @@ assertIncludes(prd, "src/views/bundle-menu.ts", "PRD must name the custom explor
 assertIncludes(prd, "BundleExplorerView", "PRD must name the custom explorer class to remove.");
 assertIncludes(prd, "registerView", "PRD must call out custom view registration removal.");
 assertIncludes(prd, "documents-bundle:open-documents-bundle-explorer", "PRD must call out custom explorer command removal.");
-assertIncludes(prd, "Make the folder title bold", "PRD must include the first lightweight native File Explorer visual marker.");
+assertIncludes(prd, "Add a small `Bundle` badge", "PRD must include the native File Explorer visual marker.");
+assertIncludes(prd, "without changing the title font weight", "PRD must state Bundle titles are not bolded by the plugin.");
 assertIncludes(prd, "Hide the Bundle's direct internals", "PRD must include native File Explorer internals hiding.");
 assertIncludes(prd, "## 9. Verification", "PRD missing verification section.");
 assertIncludes(prd, "Document.md", "PRD must describe the Bundle folder shape.");

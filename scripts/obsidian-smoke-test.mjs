@@ -234,6 +234,9 @@ async function verifyPlugin(client) {
 
     assert(existingNativeTitle, 'Existing Bundle was not marked in the native Files pane.');
     assert(!regularFolderMarked, 'Regular Folder was incorrectly marked as a Bundle.');
+    const existingBundleDisclosureIcon = existingNativeTitle.querySelector('.nav-folder-collapse-indicator, .collapse-icon');
+    const existingBundleDisclosureHidden = !existingBundleDisclosureIcon || getComputedStyle(existingBundleDisclosureIcon).display === 'none';
+    assert(existingBundleDisclosureHidden, 'Existing Bundle native disclosure icon should be hidden.');
     existingNativeTitle.querySelector('.collapse-icon')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     await sleep(500);
     plugin.refreshNativeFileExplorerPatch?.();
@@ -264,7 +267,11 @@ async function verifyPlugin(client) {
     titleForOpen.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     await sleep(750);
     const clickOpenedExisting = window.app.workspace.getActiveFile()?.path === 'Existing Bundle/Existing Bundle.md';
+    const activeExistingBundleTitle = [...document.querySelectorAll('.documents-bundle-native-bundle-title')]
+      .find((title) => title.dataset.documentsBundlePath === 'Existing Bundle' || title.innerText.includes('Existing Bundle'));
+    const existingBundleTitleActive = !!activeExistingBundleTitle?.classList.contains('documents-bundle-native-bundle-title-active');
     assert(clickOpenedExisting, 'Clicking a marked native Bundle title did not open its main Markdown file.');
+    assert(existingBundleTitleActive, 'Opened Bundle title did not receive the native active-state class.');
 
     const scan = plugin.scanBundles();
 
@@ -470,9 +477,11 @@ async function verifyPlugin(client) {
         nativeBundleTitles,
         postMutationMarkedBundles,
         regularFolderMarked,
+        existingBundleDisclosureHidden,
         existingBundleInternalsHidden,
         regularFolderChildrenHidden,
-        clickOpenedExisting
+        clickOpenedExisting,
+        existingBundleTitleActive
       },
       scan,
       reportFiles,
@@ -500,9 +509,11 @@ async function verifyPlugin(client) {
   assert(result.nativeFileExplorer.deletedCommandAbsent, "Deleted custom explorer command is still present.");
   assert(result.nativeFileExplorer.markedBundlePaths.includes("Existing Bundle"), "Native Files pane did not mark Existing Bundle.");
   assert(!result.nativeFileExplorer.regularFolderMarked, "Native Files pane incorrectly marked Regular Folder.");
+  assert(result.nativeFileExplorer.existingBundleDisclosureHidden, "Native Files pane did not hide the Bundle disclosure icon.");
   assert(result.nativeFileExplorer.existingBundleInternalsHidden, "Native Files pane did not hide Bundle internals.");
   assert(!result.nativeFileExplorer.regularFolderChildrenHidden, "Native Files pane incorrectly hid normal folder children.");
   assert(result.nativeFileExplorer.clickOpenedExisting, "Native Files pane Bundle title click did not open the main Markdown file.");
+  assert(result.nativeFileExplorer.existingBundleTitleActive, "Native Files pane Bundle title did not show active state.");
   assert(result.scan.bundles === 4, `Expected 4 bundles, got ${result.scan.bundles}.`);
   assert(result.scan.incompleteCandidates === 2, `Expected 2 incomplete bundle candidates, got ${result.scan.incompleteCandidates}.`);
   assert(result.reportFiles.length > 0, "Vault attachment migration dry-run did not create a report.");

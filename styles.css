@@ -1,0 +1,33 @@
+.documents-bundle-native-bundle-title::after {
+  background: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  content: attr(data-documents-bundle-label);
+  font-size: var(--font-ui-smaller);
+  font-weight: 500;
+  margin-left: 6px;
+  padding: 0 4px;
+  vertical-align: 1px;
+}
+
+.documents-bundle-native-bundle-title-active {
+  background-color: var(--nav-item-background-active, var(--background-modifier-hover));
+  color: var(--nav-item-color-active, var(--text-normal));
+}
+
+.documents-bundle-native-bundle-title-active::after {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.documents-bundle-native-bundle-title > .nav-folder-collapse-indicator,
+.documents-bundle-native-bundle-title > .collapse-icon {
+  display: none;
+}
+
+.documents-bundle-native-bundle > .nav-folder-children,
+.documents-bundle-native-bundle > .tree-item-children,
+.documents-bundle-native-bundle-children {
+  display: none;
+}

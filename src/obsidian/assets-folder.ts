@@ -10,6 +10,7 @@ export interface OpenAssetsFolderContext {
   adapter: unknown;
   isDesktopApp: boolean;
   notify(message: string): void;
+  formatAssetsFolderMessage?: (path: string) => string;
   openPath?: (path: string) => Promise<string>;
 }
 
@@ -18,19 +19,20 @@ export async function openAssetsFolderWithFallback(
   bundle: BundleInfo
 ): Promise<OpenAssetsFolderResult> {
   await context.ensureFolder(bundle.assetsFolderPath);
+  const fallbackMessage = context.formatAssetsFolderMessage?.(bundle.assetsFolderPath) ?? `Assets folder: ${bundle.assetsFolderPath}`;
 
   if (!context.isDesktopApp) {
-    context.notify(`Assets folder: ${bundle.assetsFolderPath}`);
+    context.notify(fallbackMessage);
     return { status: "fallback", path: bundle.assetsFolderPath, reason: "not-desktop" };
   }
 
   if (!hasFullPathAdapter(context.adapter)) {
-    context.notify(`Assets folder: ${bundle.assetsFolderPath}`);
+    context.notify(fallbackMessage);
     return { status: "fallback", path: bundle.assetsFolderPath, reason: "missing-full-path" };
   }
 
   if (!context.openPath) {
-    context.notify(`Assets folder: ${bundle.assetsFolderPath}`);
+    context.notify(fallbackMessage);
     return { status: "fallback", path: bundle.assetsFolderPath, reason: "missing-open-path" };
   }
 

@@ -1,9 +1,11 @@
 import { Platform, TFolder, type App } from "obsidian";
-import { isBundleFolderSnapshot } from "../core/bundle";
+import { getBundleInfoFromFolderPath, isBundleFolderSnapshot } from "../core/bundle";
 import { basename } from "../core/path";
+import type { Translate } from "../i18n";
 
 export const NATIVE_BUNDLE_CLASS = "documents-bundle-native-bundle";
 export const NATIVE_BUNDLE_TITLE_CLASS = "documents-bundle-native-bundle-title";
+export const NATIVE_BUNDLE_TITLE_ACTIVE_CLASS = "documents-bundle-native-bundle-title-active";
 export const NATIVE_BUNDLE_CHILDREN_CLASS = "documents-bundle-native-bundle-children";
 
 type OpenBundle = (folderPath: string) => Promise<void>;
@@ -12,6 +14,7 @@ interface NativeFileExplorerPatchOptions {
   app: App;
   attachmentFolderName: string;
   openBundle: OpenBundle;
+  t: Translate;
 }
 
 export class NativeFileExplorerPatch {
@@ -42,9 +45,10 @@ export class NativeFileExplorerPatch {
     }
     this.listeners.clear();
 
-    for (const element of Array.from(document.querySelectorAll(`.${NATIVE_BUNDLE_CLASS}, .${NATIVE_BUNDLE_TITLE_CLASS}, .${NATIVE_BUNDLE_CHILDREN_CLASS}`))) {
-      element.classList.remove(NATIVE_BUNDLE_CLASS, NATIVE_BUNDLE_TITLE_CLASS, NATIVE_BUNDLE_CHILDREN_CLASS);
+    for (const element of Array.from(document.querySelectorAll(`.${NATIVE_BUNDLE_CLASS}, .${NATIVE_BUNDLE_TITLE_CLASS}, .${NATIVE_BUNDLE_TITLE_ACTIVE_CLASS}, .${NATIVE_BUNDLE_CHILDREN_CLASS}`))) {
+      element.classList.remove(NATIVE_BUNDLE_CLASS, NATIVE_BUNDLE_TITLE_CLASS, NATIVE_BUNDLE_TITLE_ACTIVE_CLASS, NATIVE_BUNDLE_CHILDREN_CLASS);
       delete (element as HTMLElement).dataset.documentsBundlePath;
+      delete (element as HTMLElement).dataset.documentsBundleLabel;
     }
   }
 
@@ -84,6 +88,8 @@ export class NativeFileExplorerPatch {
     getFolderChildrenElement(node)?.classList.add(NATIVE_BUNDLE_CHILDREN_CLASS);
     (node as HTMLElement).dataset.documentsBundlePath = folderPath;
     (title as HTMLElement).dataset.documentsBundlePath = folderPath;
+    (title as HTMLElement).dataset.documentsBundleLabel = this.options.t("badge.bundle");
+    this.updateBundleActiveState(title, folderPath);
 
     if (this.listeners.has(title)) {
       return;
@@ -105,16 +111,23 @@ export class NativeFileExplorerPatch {
 
   private unmarkBundleNode(node: Element, title: Element): void {
     node.classList.remove(NATIVE_BUNDLE_CLASS);
-    title.classList.remove(NATIVE_BUNDLE_TITLE_CLASS);
+    title.classList.remove(NATIVE_BUNDLE_TITLE_CLASS, NATIVE_BUNDLE_TITLE_ACTIVE_CLASS);
     getFolderChildrenElement(node)?.classList.remove(NATIVE_BUNDLE_CHILDREN_CLASS);
     delete (node as HTMLElement).dataset.documentsBundlePath;
     delete (title as HTMLElement).dataset.documentsBundlePath;
+    delete (title as HTMLElement).dataset.documentsBundleLabel;
 
     const listener = this.listeners.get(title);
     if (listener) {
       title.removeEventListener("click", listener, true);
       this.listeners.delete(title);
     }
+  }
+
+  private updateBundleActiveState(title: Element, folderPath: string): void {
+    const activePath = this.options.app.workspace.getActiveFile()?.path;
+    const bundle = getBundleInfoFromFolderPath(folderPath, this.options.attachmentFolderName);
+    title.classList.toggle(NATIVE_BUNDLE_TITLE_ACTIVE_CLASS, activePath === bundle.mainFilePath);
   }
 
   private collectBundleFolderPaths(): Set<string> {

@@ -1,4 +1,5 @@
 import type { BundleInfo } from "../types";
+import type { Translate, TranslationKey } from "../i18n";
 import { basename, dirname, extname, joinVaultPath, normalizeVaultPath } from "./path";
 
 export interface AttachmentMigrationInput {
@@ -38,6 +39,32 @@ export interface VaultAttachmentMigrationValidation {
   sharedSourcePaths: string[];
   duplicateTargetPaths: string[];
 }
+
+interface RenderVaultAttachmentMigrationReportOptions {
+  validation?: VaultAttachmentMigrationValidation;
+  t?: Translate;
+}
+
+const DEFAULT_REPORT_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
+  "report.title": "Documents Bundle Attachment Migration Report",
+  "report.summary": "Summary",
+  "report.bundlesScanned": "Bundles scanned",
+  "report.bundlesWithMigrations": "Bundles with migrations",
+  "report.attachmentReferencesToMigrate": "Attachment references to migrate",
+  "report.sharedSourceAttachments": "Shared source attachments",
+  "report.blockingIssues": "Blocking issues",
+  "report.blockingIssuesHeading": "Blocking Issues",
+  "report.sharedSourcesHeading": "Shared Sources",
+  "report.sharedSourcesDescription": "These source files are referenced by multiple bundle migrations. They will be copied into each target bundle instead of moved.",
+  "report.plannedMovesHeading": "Planned Moves",
+  "report.noAttachmentMigrations": "No attachment migrations are planned.",
+  "report.table.bundle": "Bundle",
+  "report.table.source": "Source",
+  "report.table.target": "Target",
+  "report.table.rewrittenLink": "Rewritten link"
+};
+
+const englishReportText: Translate = (key) => DEFAULT_REPORT_TRANSLATIONS[key] ?? key;
 
 type LinkKind = "markdown" | "wiki";
 
@@ -162,23 +189,25 @@ export function validateVaultAttachmentMigration(summary: VaultAttachmentMigrati
 
 export function renderVaultAttachmentMigrationReport(
   summary: VaultAttachmentMigrationReport,
-  validation = validateVaultAttachmentMigration(summary)
+  options: RenderVaultAttachmentMigrationReportOptions = {}
 ): string {
+  const validation = options.validation ?? validateVaultAttachmentMigration(summary);
+  const t = options.t ?? englishReportText;
   const lines = [
-    "# Documents Bundle Attachment Migration Report",
+    `# ${t("report.title")}`,
     "",
-    "## Summary",
+    `## ${t("report.summary")}`,
     "",
-    `- Bundles scanned: ${summary.bundlesScanned}`,
-    `- Bundles with migrations: ${summary.bundlesWithMigrations}`,
-    `- Attachment references to migrate: ${summary.attachmentsToMove}`,
-    `- Shared source attachments: ${validation.sharedSourcePaths.length}`,
-    `- Blocking issues: ${validation.errors.length}`,
+    `- ${t("report.bundlesScanned")}: ${summary.bundlesScanned}`,
+    `- ${t("report.bundlesWithMigrations")}: ${summary.bundlesWithMigrations}`,
+    `- ${t("report.attachmentReferencesToMigrate")}: ${summary.attachmentsToMove}`,
+    `- ${t("report.sharedSourceAttachments")}: ${validation.sharedSourcePaths.length}`,
+    `- ${t("report.blockingIssues")}: ${validation.errors.length}`,
     ""
   ];
 
   if (validation.errors.length > 0) {
-    lines.push("## Blocking Issues", "");
+    lines.push(`## ${t("report.blockingIssuesHeading")}`, "");
     for (const error of validation.errors) {
       lines.push(`- ${error}`);
     }
@@ -186,8 +215,8 @@ export function renderVaultAttachmentMigrationReport(
   }
 
   if (validation.sharedSourcePaths.length > 0) {
-    lines.push("## Shared Sources", "");
-    lines.push("These source files are referenced by multiple bundle migrations. They will be copied into each target bundle instead of moved.");
+    lines.push(`## ${t("report.sharedSourcesHeading")}`, "");
+    lines.push(t("report.sharedSourcesDescription"));
     lines.push("");
     for (const path of validation.sharedSourcePaths) {
       lines.push(`- ${path}`);
@@ -195,7 +224,7 @@ export function renderVaultAttachmentMigrationReport(
     lines.push("");
   }
 
-  lines.push("## Planned Moves", "");
+  lines.push(`## ${t("report.plannedMovesHeading")}`, "");
   const rows = summary.reports.flatMap((report) => report.plan.items.map((item) => ({
     bundle: report.bundle.folderPath,
     source: item.sourcePath,
@@ -204,9 +233,9 @@ export function renderVaultAttachmentMigrationReport(
   })));
 
   if (rows.length === 0) {
-    lines.push("No attachment migrations are planned.", "");
+    lines.push(t("report.noAttachmentMigrations"), "");
   } else {
-    lines.push("| Bundle | Source | Target | Rewritten link |");
+    lines.push(`| ${t("report.table.bundle")} | ${t("report.table.source")} | ${t("report.table.target")} | ${t("report.table.rewrittenLink")} |`);
     lines.push("| --- | --- | --- | --- |");
     for (const row of rows) {
       lines.push(`| ${escapeTableCell(row.bundle)} | ${escapeTableCell(row.source)} | ${escapeTableCell(row.target)} | ${escapeTableCell(row.link)} |`);

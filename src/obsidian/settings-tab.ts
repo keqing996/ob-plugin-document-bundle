@@ -10,11 +10,11 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Documents Bundle" });
+    containerEl.createEl("h2", { text: this.plugin.t("settings.title") });
 
     new Setting(containerEl)
-      .setName("Default attachment folder name")
-      .setDesc("Attachments pasted or dropped into bundle documents are stored here.")
+      .setName(this.plugin.t("settings.defaultAttachmentFolderName.name"))
+      .setDesc(this.plugin.t("settings.defaultAttachmentFolderName.desc"))
       .addText((text) => {
         text
           .setPlaceholder("assets")
@@ -26,13 +26,13 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Paste into normal note")
-      .setDesc("Choose what happens when attachments are pasted into a note that is not already a bundle.")
+      .setName(this.plugin.t("settings.pasteIntoNormalNote.name"))
+      .setDesc(this.plugin.t("settings.pasteIntoNormalNote.desc"))
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("ask", "Ask to convert")
-          .addOption("auto-convert", "Auto convert")
-          .addOption("default", "Use Obsidian default")
+          .addOption("ask", this.plugin.t("settings.pasteIntoNormalNote.ask"))
+          .addOption("auto-convert", this.plugin.t("settings.pasteIntoNormalNote.autoConvert"))
+          .addOption("default", this.plugin.t("settings.pasteIntoNormalNote.default"))
           .setValue(this.plugin.settings.pasteIntoNormalNoteBehavior)
           .onChange(async (value) => {
             this.plugin.settings.pasteIntoNormalNoteBehavior = value as "ask" | "auto-convert" | "default";
@@ -41,8 +41,8 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Handle pasted attachments")
-      .setDesc("Store pasted files in the active bundle assets folder.")
+      .setName(this.plugin.t("settings.handlePastedAttachments.name"))
+      .setDesc(this.plugin.t("settings.handlePastedAttachments.desc"))
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.handlePastedAttachments)
@@ -53,8 +53,8 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Handle dropped attachments")
-      .setDesc("Store files dropped into the editor in the active bundle assets folder.")
+      .setName(this.plugin.t("settings.handleDroppedAttachments.name"))
+      .setDesc(this.plugin.t("settings.handleDroppedAttachments.desc"))
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.handleDroppedAttachments)
@@ -65,8 +65,8 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Enhance native File Explorer")
-      .setDesc("Mark Document Bundle folders in Obsidian's native Files pane.")
+      .setName(this.plugin.t("settings.enhanceNativeFileExplorer.name"))
+      .setDesc(this.plugin.t("settings.enhanceNativeFileExplorer.desc"))
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.enhanceNativeFileExplorer)
