@@ -35,7 +35,7 @@ The plugin also enhances Obsidian's native Files pane. Recognized bundle folders
 
 ## Usage
 
-Use **New bundle document** to create a folder with a matching Markdown file and an `assets/` folder. For example, a document named `Project Brief` becomes:
+Use **New bundle document** to create an untitled bundle, then rename it directly in Obsidian's Files pane. For example, renaming it to `Project Brief` creates:
 
 ```text
 Project Brief/

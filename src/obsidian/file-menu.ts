@@ -18,8 +18,6 @@ export interface BundleFolderMenuActions {
   previewAttachmentMigration(): unknown;
   migrateAttachments(): unknown;
   renameBundle(): unknown;
-  duplicateBundle(): unknown;
-  moveBundle(): unknown;
 }
 
 export interface NormalFolderMenuActions {
@@ -41,8 +39,6 @@ export function addBundleFolderMenuItems(menu: ObsidianMenu, actions: BundleFold
   menu.addItem((item) => item.setTitle(t("menu.previewAttachmentMigration")).setIcon("list-checks").onClick(() => void actions.previewAttachmentMigration()));
   menu.addItem((item) => item.setTitle(t("menu.migrateAttachments")).setIcon("folder-input").onClick(() => void actions.migrateAttachments()));
   menu.addItem((item) => item.setTitle(t("menu.renameBundle")).setIcon("pencil").onClick(() => void actions.renameBundle()));
-  menu.addItem((item) => item.setTitle(t("menu.duplicateBundle")).setIcon("copy").onClick(() => void actions.duplicateBundle()));
-  menu.addItem((item) => item.setTitle(t("menu.moveBundle")).setIcon("move").onClick(() => void actions.moveBundle()));
 }
 
 export function addNormalFolderMenuItems(menu: ObsidianMenu, actions: NormalFolderMenuActions, t: Translate = englishText): void {

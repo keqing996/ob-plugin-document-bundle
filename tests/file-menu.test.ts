@@ -69,9 +69,7 @@ describe("Obsidian native file menu helpers", () => {
       repairBundle: () => calls.push("repair:Project"),
       previewAttachmentMigration: () => calls.push("preview:Project"),
       migrateAttachments: () => calls.push("migrate:Project"),
-      renameBundle: () => calls.push("rename:Project"),
-      duplicateBundle: () => calls.push("duplicate:Project"),
-      moveBundle: () => calls.push("move:Project")
+      renameBundle: () => calls.push("rename:Project")
     });
 
     expect(menu.entries[0]).toEqual({ type: "separator" });
@@ -81,9 +79,7 @@ describe("Obsidian native file menu helpers", () => {
       { title: "Repair bundle", icon: "wrench" },
       { title: "Preview attachment migration", icon: "list-checks" },
       { title: "Migrate attachments", icon: "folder-input" },
-      { title: "Rename bundle", icon: "pencil" },
-      { title: "Duplicate bundle", icon: "copy" },
-      { title: "Move bundle", icon: "move" }
+      { title: "Rename bundle", icon: "pencil" }
     ]);
 
     for (const item of menu.items()) {
@@ -96,9 +92,7 @@ describe("Obsidian native file menu helpers", () => {
       "repair:Project",
       "preview:Project",
       "migrate:Project",
-      "rename:Project",
-      "duplicate:Project",
-      "move:Project"
+      "rename:Project"
     ]);
   });
 

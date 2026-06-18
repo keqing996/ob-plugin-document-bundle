@@ -24,8 +24,6 @@ const EN_TRANSLATIONS = {
   "menu.previewAttachmentMigration": "Preview attachment migration",
   "menu.migrateAttachments": "Migrate attachments",
   "menu.renameBundle": "Rename bundle",
-  "menu.duplicateBundle": "Duplicate bundle",
-  "menu.moveBundle": "Move bundle",
   "menu.newBundleDocumentHere": "New bundle document here",
   "menu.repairFolderAsBundle": "Repair folder as bundle",
   "menu.convertToBundle": "Convert to bundle",
@@ -44,14 +42,6 @@ const EN_TRANSLATIONS = {
   "settings.handleDroppedAttachments.desc": "Store files dropped into the editor in the active bundle assets folder.",
   "settings.enhanceNativeFileExplorer.name": "Enhance native File Explorer",
   "settings.enhanceNativeFileExplorer.desc": "Mark Document Bundle folders in Obsidian's native Files pane.",
-
-  "prompt.newBundleDocument.title": "New bundle document",
-  "prompt.documentName.placeholder": "Document name",
-  "prompt.create.button": "Create",
-  "prompt.renameBundle.title": "Rename bundle",
-  "prompt.rename.button": "Rename",
-  "prompt.moveBundle.title": "Move bundle",
-  "prompt.move.button": "Move",
 
   "suggest.openBundleDocument.placeholder": "Open bundle document...",
 
@@ -76,6 +66,7 @@ const EN_TRANSLATIONS = {
   "notice.migratedVaultAttachments": "Migrated {attachments} attachment reference(s) across {bundles} bundle(s).",
   "notice.movedBundle": "Moved bundle: {name}",
   "notice.deletedBundle": "Deleted bundle: {name}",
+  "notice.nativeRenameUnavailable": "Obsidian inline rename is unavailable. Use the Files pane rename action.",
 
   "error.cannotMigrateMissingAttachment": "Cannot migrate missing attachment: {path}",
   "error.cannotMigrateAttachmentTargetExists": "Cannot migrate attachment: target already exists: {path}",
@@ -110,7 +101,7 @@ const EN_TRANSLATIONS = {
 } as const;
 
 const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
-  "badge.bundle": "包",
+  "badge.bundle": "Bundle",
   "button.cancel": "取消",
   "button.confirm": "确认",
 
@@ -131,8 +122,6 @@ const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
   "menu.previewAttachmentMigration": "预览附件迁移",
   "menu.migrateAttachments": "迁移附件",
   "menu.renameBundle": "重命名文档包",
-  "menu.duplicateBundle": "复制文档包",
-  "menu.moveBundle": "移动文档包",
   "menu.newBundleDocumentHere": "在此处新建文档包",
   "menu.repairFolderAsBundle": "将文件夹修复为文档包",
   "menu.convertToBundle": "转换为文档包",
@@ -151,14 +140,6 @@ const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
   "settings.handleDroppedAttachments.desc": "将拖入编辑器的文件存入当前文档包的附件文件夹。",
   "settings.enhanceNativeFileExplorer.name": "增强原生文件列表",
   "settings.enhanceNativeFileExplorer.desc": "在 Obsidian 原生文件列表中标记 Document Bundle 文件夹。",
-
-  "prompt.newBundleDocument.title": "新建文档包",
-  "prompt.documentName.placeholder": "文档名称",
-  "prompt.create.button": "创建",
-  "prompt.renameBundle.title": "重命名文档包",
-  "prompt.rename.button": "重命名",
-  "prompt.moveBundle.title": "移动文档包",
-  "prompt.move.button": "移动",
 
   "suggest.openBundleDocument.placeholder": "打开文档包...",
 
@@ -183,6 +164,7 @@ const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
   "notice.migratedVaultAttachments": "已迁移 {bundles} 个文档包中的 {attachments} 个附件引用。",
   "notice.movedBundle": "已移动文档包：{name}",
   "notice.deletedBundle": "已删除文档包：{name}",
+  "notice.nativeRenameUnavailable": "Obsidian 内联重命名不可用。请使用文件列表的重命名操作。",
 
   "error.cannotMigrateMissingAttachment": "无法迁移缺失的附件：{path}",
   "error.cannotMigrateAttachmentTargetExists": "无法迁移附件：目标已存在：{path}",

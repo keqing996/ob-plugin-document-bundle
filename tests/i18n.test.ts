@@ -14,4 +14,9 @@ describe("i18n", () => {
     expect(translate("zh", "notice.assetsFolder", { path: "Project/assets" }))
       .toBe("附件文件夹：Project/assets");
   });
+
+  it("keeps the native file explorer badge untranslated", () => {
+    expect(translate("en", "badge.bundle")).toBe("Bundle");
+    expect(translate("zh", "badge.bundle")).toBe("Bundle");
+  });
 });
