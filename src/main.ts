@@ -1,19 +1,19 @@
 import { getLanguage, MarkdownView, Notice, Platform, Plugin, TAbstractFile, TFile, TFolder } from "obsidian";
-import { getBundleInfoFromFolderPath, getBundleInfoFromMainFilePath, isBundleFolderSnapshot } from "./core/bundle";
-import { rewriteDocumentLinks, type DocumentLinkMove } from "./core/document-links";
+import { getBundleInfoFromFolderPath, getBundleInfoFromMainFilePath, isBundleFolderSnapshot, type BundleFolderChildSnapshot } from "./core/bundle";
+import { rewriteAttachmentLinksForMovedFile } from "./core/document-links";
 import { planAttachmentMigration, renderVaultAttachmentMigrationReport, summarizeVaultAttachmentMigration, validateVaultAttachmentMigration, type AttachmentMigrationPlan, type BundleAttachmentMigrationReport, type VaultAttachmentMigrationReport } from "./core/migration";
 import { getAvailableFilename } from "./core/naming";
-import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, ensureBundleAlias, moveBundle, repairBundleStructure } from "./core/operations";
+import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle } from "./core/operations";
 import { basename, dirname, formatTimestamp, joinVaultPath } from "./core/path";
 import { handleDrop, handlePaste } from "./obsidian/attachments";
+import { AttachmentMigrationModal } from "./obsidian/attachment-migration-modal";
 import { openAssetsFolderWithFallback } from "./obsidian/assets-folder";
-import { BundleSuggestModal } from "./obsidian/bundle-suggest-modal";
 import { addBundleFolderMenuItems, addNormalFolderMenuItems, addNormalMarkdownMenuItems } from "./obsidian/file-menu";
 import { ObsidianBundleFileSystem } from "./obsidian/fs";
 import { promptForNativeRename } from "./obsidian/native-rename";
 import { ConfirmModal } from "./obsidian/prompt-modal";
 import { DocumentsBundleSettingTab } from "./obsidian/settings-tab";
-import { DEFAULT_SETTINGS } from "./settings";
+import { BUNDLE_ASSETS_FOLDER_NAME, DEFAULT_SETTINGS, normalizeSettings } from "./settings";
 import type { BundleInfo, DocumentsBundleSettings } from "./types";
 import { NativeFileExplorerPatch } from "./obsidian/native-file-explorer-patch";
 import { getCurrentLocale, translate, type TranslationKey, type TranslationVars } from "./i18n";
@@ -76,11 +76,6 @@ export default class DocumentsBundlePlugin extends Plugin {
       return this.t("error.cannotMoveBundleTargetExists", { name: moveTarget[1] });
     }
 
-    const repairMultiple = message.match(/^Cannot repair bundle "(.+)": multiple Markdown files found\.$/);
-    if (repairMultiple) {
-      return this.t("error.cannotRepairBundleMultipleMarkdown", { name: repairMultiple[1] });
-    }
-
     const unavailableAttachmentTarget = message.match(/^Could not find an available attachment target for "(.+)"\.$/);
     if (unavailableAttachmentTarget) {
       return this.t("error.attachmentTargetUnavailable", { name: unavailableAttachmentTarget[1] });
@@ -90,8 +85,7 @@ export default class DocumentsBundlePlugin extends Plugin {
   }
 
   async onload(): Promise<void> {
-    const savedSettings = await this.loadData() as Partial<DocumentsBundleSettings> | null;
-    this.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
+    this.settings = normalizeSettings(await this.loadData());
     this.fs = new ObsidianBundleFileSystem(this.app.vault, {
       afterBundleMainCopied: async (path) => {
         const file = this.app.vault.getAbstractFileByPath(path);
@@ -104,134 +98,6 @@ export default class DocumentsBundlePlugin extends Plugin {
     this.addSettingTab(new DocumentsBundleSettingTab(this.app, this));
 
     this.enableNativeFileExplorerPatch();
-
-    this.addCommand({
-      id: "new-bundle-document",
-      name: this.t("command.newBundleDocument"),
-      callback: () => {
-        const parentPath = this.getDefaultParentPath();
-        void this.createBundleAndRename(parentPath);
-      }
-    });
-
-    this.addCommand({
-      id: "open-bundle-document",
-      name: this.t("command.openBundleDocument"),
-      callback: () => {
-        this.openBundleSuggestModal();
-      }
-    });
-
-    this.addCommand({
-      id: "convert-current-note-to-bundle",
-      name: this.t("command.convertCurrentNoteToBundle"),
-      checkCallback: (checking) => {
-        const file = this.app.workspace.getActiveFile();
-        if (!file || file.extension !== "md") {
-          return false;
-        }
-
-        if (!checking) {
-          void this.convertFileToBundle(file);
-        }
-
-        return true;
-      }
-    });
-
-    this.addCommand({
-      id: "open-current-bundle-assets-folder",
-      name: this.t("command.openCurrentBundleAssetsFolder"),
-      checkCallback: (checking) => {
-        const file = this.app.workspace.getActiveFile();
-        const bundle = file ? getBundleInfoFromMainFilePath(file.path, this.settings.attachmentFolderName) : null;
-        if (!bundle) {
-          return false;
-        }
-
-        if (!checking) {
-          void this.openAssetsFolder(bundle);
-        }
-
-        return true;
-      }
-    });
-
-    this.addCommand({
-      id: "repair-current-bundle-structure",
-      name: this.t("command.repairCurrentBundleStructure"),
-      checkCallback: (checking) => {
-        const folder = this.getCurrentRepairFolder();
-        if (!folder) {
-          return false;
-        }
-
-        if (!checking) {
-          void this.repairBundleFolder(folder);
-        }
-
-        return true;
-      }
-    });
-
-    this.addCommand({
-      id: "preview-current-bundle-attachment-migration",
-      name: this.t("command.previewCurrentBundleAttachmentMigration"),
-      checkCallback: (checking) => {
-        const file = this.getActiveBundleMainFile();
-        if (!file) {
-          return false;
-        }
-
-        if (!checking) {
-          void this.previewAttachmentMigration(file);
-        }
-
-        return true;
-      }
-    });
-
-    this.addCommand({
-      id: "migrate-current-bundle-attachments",
-      name: this.t("command.migrateCurrentBundleAttachments"),
-      checkCallback: (checking) => {
-        const file = this.getActiveBundleMainFile();
-        if (!file) {
-          return false;
-        }
-
-        if (!checking) {
-          void this.migrateCurrentBundleAttachments(file);
-        }
-
-        return true;
-      }
-    });
-
-    this.addCommand({
-      id: "preview-vault-attachment-migration",
-      name: this.t("command.previewVaultAttachmentMigration"),
-      callback: () => {
-        void this.previewVaultAttachmentMigration();
-      }
-    });
-
-    this.addCommand({
-      id: "migrate-vault-attachments",
-      name: this.t("command.migrateVaultAttachments"),
-      callback: () => {
-        void this.migrateVaultAttachments();
-      }
-    });
-
-    this.addCommand({
-      id: "scan-bundles",
-      name: this.t("command.scanBundles"),
-      callback: () => {
-        const result = this.scanBundles();
-        new Notice(this.t("notice.scanBundles", result));
-      }
-    });
 
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       this.addFileMenuItems(menu, file);
@@ -282,7 +148,7 @@ export default class DocumentsBundlePlugin extends Plugin {
 
   async createBundleAndRename(parentPath: string): Promise<void> {
     try {
-      const paths = await createBundleDocument(this.fs, parentPath, "Untitled", this.settings.attachmentFolderName);
+      const paths = await createBundleDocument(this.fs, parentPath, "Untitled", BUNDLE_ASSETS_FOLDER_NAME);
       const file = this.app.vault.getAbstractFileByPath(paths.mainFilePath);
       if (file instanceof TFile) {
         await this.app.workspace.getLeaf(false).openFile(file);
@@ -300,15 +166,21 @@ export default class DocumentsBundlePlugin extends Plugin {
 
   async convertFileToBundle(file: TFile): Promise<BundleInfo> {
     try {
+      const existingBundle = this.getBundleInfoForFile(file);
+      if (existingBundle) {
+        return existingBundle;
+      }
+
       const oldPath = file.path;
-      const bundle = await convertMarkdownToBundle(this.fs, file.path, this.settings.attachmentFolderName);
-      const rewrittenFiles = await this.rewriteVaultDocumentLinks([{ oldPath, newPath: bundle.mainFilePath }], new Set([bundle.mainFilePath]));
+      const bundle = await convertMarkdownToBundle(this.fs, file.path, BUNDLE_ASSETS_FOLDER_NAME);
+      let attachmentLinksRewritten = 0;
       const mainFile = this.app.vault.getAbstractFileByPath(bundle.mainFilePath);
       if (mainFile instanceof TFile) {
+        attachmentLinksRewritten = await this.rewriteMovedBundleMainAttachmentLinks(mainFile, oldPath);
         await this.app.workspace.getLeaf(false).openFile(mainFile);
       }
       this.refreshNativeFileExplorerPatch();
-      new Notice(this.t("notice.convertedToBundle", { name: bundle.folderName, count: rewrittenFiles }));
+      new Notice(this.t("notice.convertedToBundle", { name: bundle.folderName, count: attachmentLinksRewritten }));
       return bundle;
     } catch (error) {
       new Notice(this.errorMessage(error));
@@ -317,17 +189,13 @@ export default class DocumentsBundlePlugin extends Plugin {
   }
 
   async openBundle(folderPath: string): Promise<void> {
-    const bundle = getBundleInfoFromFolderPath(folderPath, this.settings.attachmentFolderName);
+    const bundle = getBundleInfoFromFolderPath(folderPath, BUNDLE_ASSETS_FOLDER_NAME);
     const file = this.app.vault.getAbstractFileByPath(bundle.mainFilePath);
     if (file instanceof TFile) {
       await this.app.workspace.getLeaf(false).openFile(file);
     } else {
       new Notice(this.t("notice.bundleMainFileNotFound", { path: bundle.mainFilePath }));
     }
-  }
-
-  openBundleSuggestModal(): void {
-    new BundleSuggestModal(this).open();
   }
 
   async renameBundleInline(folderPath: string): Promise<void> {
@@ -345,8 +213,8 @@ export default class DocumentsBundlePlugin extends Plugin {
 
   async duplicateBundle(folderPath: string): Promise<void> {
     try {
-      const bundle = getBundleInfoFromFolderPath(folderPath, this.settings.attachmentFolderName);
-      const copied = await copyBundle(this.fs, bundle, dirname(folderPath), this.settings.attachmentFolderName);
+      const bundle = getBundleInfoFromFolderPath(folderPath, BUNDLE_ASSETS_FOLDER_NAME);
+      const copied = await copyBundle(this.fs, bundle, dirname(folderPath), BUNDLE_ASSETS_FOLDER_NAME);
       await this.openBundle(copied.folderPath);
       this.refreshNativeFileExplorerPatch();
       new Notice(this.t("notice.duplicatedBundle", { name: copied.folderName }));
@@ -374,34 +242,19 @@ export default class DocumentsBundlePlugin extends Plugin {
     }
   }
 
-  async repairBundleFolder(folder: TFolder): Promise<void> {
-    try {
-      const childNames = folder.children.map((child) => child.name);
-      const plan = await repairBundleStructure(this.fs, folder.path, childNames, this.settings.attachmentFolderName);
-      this.refreshNativeFileExplorerPatch();
-
-      const mainFile = this.app.vault.getAbstractFileByPath(plan.bundle.mainFilePath);
-      if (mainFile instanceof TFile) {
-        await this.app.workspace.getLeaf(false).openFile(mainFile);
-      }
-
-      if (plan.actions.length === 0) {
-        new Notice(this.t("notice.bundleAlreadyValid", { name: plan.bundle.folderName }));
-      } else {
-        new Notice(this.t("notice.repairedBundle", { name: plan.bundle.folderName }));
-      }
-    } catch (error) {
-      new Notice(this.errorMessage(error));
+  getBundleInfoForFile(file: TFile): BundleInfo | null {
+    if (file.extension !== "md") {
+      return null;
     }
-  }
 
-  async previewAttachmentMigration(file: TFile): Promise<void> {
-    try {
-      const plan = await this.planAttachmentMigrationForFile(file);
-      new Notice(this.t("notice.attachmentMigrationDryRun", { count: plan.items.length }));
-    } catch (error) {
-      new Notice(this.errorMessage(error));
+    const bundle = getBundleInfoFromMainFilePath(file.path, BUNDLE_ASSETS_FOLDER_NAME);
+    if (!bundle || !(file.parent instanceof TFolder) || file.parent.path !== bundle.folderPath) {
+      return null;
     }
+
+    return isBundleFolderSnapshot(file.parent.path, getBundleFolderChildSnapshots(file.parent), BUNDLE_ASSETS_FOLDER_NAME)
+      ? bundle
+      : null;
   }
 
   async migrateCurrentBundleAttachments(file: TFile): Promise<void> {
@@ -412,7 +265,7 @@ export default class DocumentsBundlePlugin extends Plugin {
         return;
       }
 
-      const confirmed = await this.confirm(this.t("confirm.migrateCurrentBundleAttachments", { count: plan.items.length }));
+      const confirmed = await this.confirmAttachmentMigration(plan);
       if (!confirmed) {
         return;
       }
@@ -436,6 +289,18 @@ export default class DocumentsBundlePlugin extends Plugin {
     } catch (error) {
       new Notice(this.errorMessage(error));
     }
+  }
+
+  async confirmAttachmentMigration(plan: AttachmentMigrationPlan): Promise<boolean> {
+    return new AttachmentMigrationModal(this.app, {
+      title: this.t("modal.migrateAttachments.title"),
+      description: this.t("modal.migrateAttachments.description", { count: plan.items.length }),
+      sourceLabel: this.t("modal.migrateAttachments.source"),
+      targetLabel: this.t("modal.migrateAttachments.target"),
+      confirmLabel: this.t("button.confirm"),
+      cancelLabel: this.t("button.cancel"),
+      items: plan.items
+    }).openAndGetConfirmation();
   }
 
   async previewVaultAttachmentMigration(): Promise<void> {
@@ -529,8 +394,8 @@ export default class DocumentsBundlePlugin extends Plugin {
         throw new Error(this.t("error.cannotMoveBundleIntoItself"));
       }
 
-      const bundle = getBundleInfoFromFolderPath(folderPath, this.settings.attachmentFolderName);
-      const moved = await moveBundle(this.fs, bundle, normalizedTargetParentPath, this.settings.attachmentFolderName);
+      const bundle = getBundleInfoFromFolderPath(folderPath, BUNDLE_ASSETS_FOLDER_NAME);
+      const moved = await moveBundle(this.fs, bundle, normalizedTargetParentPath, BUNDLE_ASSETS_FOLDER_NAME);
       await this.openBundle(moved.folderPath);
       void this.fs.deleteEmptyFolderTree(folderPath).then((deleted) => {
         if (deleted) {
@@ -546,7 +411,7 @@ export default class DocumentsBundlePlugin extends Plugin {
 
   async deleteBundleWithConfirm(folderPath: string): Promise<void> {
     try {
-      const bundle = getBundleInfoFromFolderPath(folderPath, this.settings.attachmentFolderName);
+      const bundle = getBundleInfoFromFolderPath(folderPath, BUNDLE_ASSETS_FOLDER_NAME);
       const confirmed = await this.confirm(this.t("confirm.deleteBundle", { name: bundle.folderName }));
       if (!confirmed) {
         return;
@@ -560,86 +425,32 @@ export default class DocumentsBundlePlugin extends Plugin {
     }
   }
 
-  private getDefaultParentPath(): string {
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
-      return "";
-    }
-
-    const activeBundle = getBundleInfoFromMainFilePath(activeFile.path, this.settings.attachmentFolderName);
-    if (activeBundle) {
-      return dirname(activeBundle.folderPath);
-    }
-
-    const parent = activeFile.parent;
-    return parent instanceof TFolder ? parent.path : "";
-  }
-
   private addFileMenuItems(menu: import("obsidian").Menu, file: TAbstractFile): void {
     if (file instanceof TFolder) {
-      const childNames = file.children.map((child) => child.name);
-      const isBundle = isBundleFolderSnapshot(file.path, childNames, this.settings.attachmentFolderName);
+      const isBundle = isBundleFolderSnapshot(file.path, getBundleFolderChildSnapshots(file), BUNDLE_ASSETS_FOLDER_NAME);
 
       if (isBundle) {
         addBundleFolderMenuItems(menu, {
-          openBundle: () => this.openBundle(file.path),
-          openBundleAssets: () => this.openAssetsFolder(getBundleInfoFromFolderPath(file.path, this.settings.attachmentFolderName)),
-          repairBundle: () => this.repairBundleFolder(file),
-          previewAttachmentMigration: () => this.previewBundleFolderAttachmentMigration(file.path),
+          openBundleAssets: () => this.openAssetsFolder(getBundleInfoFromFolderPath(file.path, BUNDLE_ASSETS_FOLDER_NAME)),
           migrateAttachments: () => this.migrateBundleFolderAttachments(file.path),
           renameBundle: () => this.renameBundleInline(file.path)
         }, this.t.bind(this));
       } else {
         addNormalFolderMenuItems(menu, {
-          createBundleHere: () => this.createBundleAndRename(file.path),
-          repairFolderAsBundle: () => this.repairBundleFolder(file)
+          createBundleHere: () => this.createBundleAndRename(file.path)
         }, this.t.bind(this));
       }
     }
 
-    if (file instanceof TFile && file.extension === "md" && !getBundleInfoFromMainFilePath(file.path, this.settings.attachmentFolderName)) {
+    if (file instanceof TFile && file.extension === "md" && !this.getBundleInfoForFile(file)) {
       addNormalMarkdownMenuItems(menu, {
         convertToBundle: () => this.convertFileToBundle(file)
       }, this.t.bind(this));
     }
   }
 
-  private getActiveBundleMainFile(): TFile | null {
-    const file = this.app.workspace.getActiveFile();
-    if (!file || file.extension !== "md") {
-      return null;
-    }
-
-    const bundle = getBundleInfoFromMainFilePath(file.path, this.settings.attachmentFolderName);
-    return bundle ? file : null;
-  }
-
-  private getCurrentRepairFolder(): TFolder | null {
-    const file = this.app.workspace.getActiveFile();
-    if (!file || file.extension !== "md") {
-      return null;
-    }
-
-    const parent = file.parent;
-    if (!(parent instanceof TFolder) || parent.path.length === 0) {
-      return null;
-    }
-
-    return parent;
-  }
-
-  private async previewBundleFolderAttachmentMigration(folderPath: string): Promise<void> {
-    const bundle = getBundleInfoFromFolderPath(folderPath, this.settings.attachmentFolderName);
-    const mainFile = this.app.vault.getAbstractFileByPath(bundle.mainFilePath);
-    if (mainFile instanceof TFile) {
-      await this.previewAttachmentMigration(mainFile);
-    } else {
-      new Notice(this.t("notice.bundleMainFileNotFound", { path: bundle.mainFilePath }));
-    }
-  }
-
   private async migrateBundleFolderAttachments(folderPath: string): Promise<void> {
-    const bundle = getBundleInfoFromFolderPath(folderPath, this.settings.attachmentFolderName);
+    const bundle = getBundleInfoFromFolderPath(folderPath, BUNDLE_ASSETS_FOLDER_NAME);
     const mainFile = this.app.vault.getAbstractFileByPath(bundle.mainFilePath);
     if (mainFile instanceof TFile) {
       await this.migrateCurrentBundleAttachments(mainFile);
@@ -669,15 +480,9 @@ export default class DocumentsBundlePlugin extends Plugin {
       return;
     }
 
-    const childNames = folder.children.map((child) => child.name);
-    if (!isBundleFolderSnapshot(oldPath, childNames, this.settings.attachmentFolderName)) {
-      return;
-    }
-
-    const currentMainFilePath = joinVaultPath(folder.path, `${oldFolderName}.md`);
     const targetMainFilePath = joinVaultPath(folder.path, `${newFolderName}.md`);
-    const currentMainFile = this.app.vault.getAbstractFileByPath(currentMainFilePath);
-    if (!(currentMainFile instanceof TFile)) {
+    const currentMainFile = await this.findRenamedBundleMainFile(folder, oldFolderName, BUNDLE_ASSETS_FOLDER_NAME);
+    if (!currentMainFile) {
       return;
     }
 
@@ -687,11 +492,38 @@ export default class DocumentsBundlePlugin extends Plugin {
     }
 
     await this.app.fileManager.renameFile(currentMainFile, targetMainFilePath);
-    await ensureBundleAlias(this.fs, targetMainFilePath, newFolderName);
+  }
+
+  private async findRenamedBundleMainFile(
+    folder: TFolder,
+    oldFolderName: string,
+    attachmentFolderName: string,
+    attempts = 8,
+    delayMs = 100
+  ): Promise<TFile | null> {
+    const currentMainFilePath = joinVaultPath(folder.path, `${oldFolderName}.md`);
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const child = getPendingRenamedBundleMainFile(folder, oldFolderName, attachmentFolderName);
+      if (child instanceof TFile) {
+        return child;
+      }
+
+      const file = this.app.vault.getAbstractFileByPath(currentMainFilePath);
+      if (file instanceof TFile && hasStrictPendingRenamedBundleChildren(folder, oldFolderName, attachmentFolderName)) {
+        return file;
+      }
+
+      if (attempt < attempts - 1) {
+        await sleep(delayMs);
+      }
+    }
+
+    return null;
   }
 
   private async planAttachmentMigrationForFile(file: TFile): Promise<AttachmentMigrationPlan> {
-    const bundle = getBundleInfoFromMainFilePath(file.path, this.settings.attachmentFolderName);
+    const bundle = this.getBundleInfoForFile(file);
     if (!bundle) {
       throw new Error(this.t("error.currentFileNotBundleMain"));
     }
@@ -737,9 +569,8 @@ export default class DocumentsBundlePlugin extends Plugin {
           continue;
         }
 
-        const childNames = child.children.map((entry) => entry.name);
-        if (isBundleFolderSnapshot(child.path, childNames, this.settings.attachmentFolderName)) {
-          bundles.push(getBundleInfoFromFolderPath(child.path, this.settings.attachmentFolderName));
+        if (isBundleFolderSnapshot(child.path, getBundleFolderChildSnapshots(child), BUNDLE_ASSETS_FOLDER_NAME)) {
+          bundles.push(getBundleInfoFromFolderPath(child.path, BUNDLE_ASSETS_FOLDER_NAME));
         } else {
           walk(child);
         }
@@ -791,44 +622,36 @@ export default class DocumentsBundlePlugin extends Plugin {
     return reportPath;
   }
 
-  private async rewriteVaultDocumentLinks(moves: DocumentLinkMove[], excludedPaths = new Set<string>()): Promise<number> {
-    let rewrittenFiles = 0;
-    for (const file of this.app.vault.getMarkdownFiles()) {
-      if (excludedPaths.has(file.path)) {
-        continue;
-      }
+  private async rewriteMovedBundleMainAttachmentLinks(file: TFile, oldPath: string): Promise<number> {
+    const content = await this.app.vault.read(file);
+    const result = rewriteAttachmentLinksForMovedFile({
+      oldNotePath: oldPath,
+      newNotePath: file.path,
+      content
+    });
 
-      const content = await this.app.vault.read(file);
-      const result = rewriteDocumentLinks({
-        notePath: file.path,
-        content,
-        moves
-      });
-
-      if (result.replacements > 0) {
-        await this.app.vault.modify(file, result.updatedContent);
-        rewrittenFiles += 1;
-      }
+    if (result.replacements > 0) {
+      await this.app.vault.modify(file, result.updatedContent);
     }
 
-    return rewrittenFiles;
+    return result.replacements;
   }
 
-  private scanBundles(): { bundles: number; markdownFiles: number; incompleteCandidates: number } {
+  scanBundles(): { bundles: number; markdownFiles: number; incompleteCandidates: number } {
     let bundles = 0;
     let markdownFiles = 0;
     let incompleteCandidates = 0;
 
     const walk = (folder: TFolder): void => {
       const childNames = folder.children.map((child) => child.name);
-      if (folder.path && isBundleFolderSnapshot(folder.path, childNames, this.settings.attachmentFolderName)) {
+      if (folder.path && isBundleFolderSnapshot(folder.path, getBundleFolderChildSnapshots(folder), BUNDLE_ASSETS_FOLDER_NAME)) {
         bundles += 1;
         return;
       }
 
       const expectedMain = folder.path ? `${folder.name}.md` : "";
       const hasMatchingMain = expectedMain.length > 0 && childNames.includes(expectedMain);
-      const hasAssets = childNames.includes(this.settings.attachmentFolderName);
+      const hasAssets = childNames.includes(BUNDLE_ASSETS_FOLDER_NAME);
       if (folder.path && hasMatchingMain !== hasAssets) {
         incompleteCandidates += 1;
       }
@@ -856,7 +679,8 @@ export default class DocumentsBundlePlugin extends Plugin {
 
     this.nativeFileExplorerPatch = new NativeFileExplorerPatch({
       app: this.app,
-      attachmentFolderName: this.settings.attachmentFolderName,
+      attachmentFolderName: BUNDLE_ASSETS_FOLDER_NAME,
+      badgeMode: this.settings.bundleBadgeMode,
       openBundle: (folderPath) => this.openBundle(folderPath),
       t: this.t.bind(this)
     });
@@ -866,4 +690,32 @@ export default class DocumentsBundlePlugin extends Plugin {
   refreshNativeFileExplorerPatch(): void {
     this.nativeFileExplorerPatch?.refresh();
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function getBundleFolderChildSnapshots(folder: TFolder): BundleFolderChildSnapshot[] {
+  return folder.children.map((child) => ({
+    name: child.name,
+    type: child instanceof TFolder ? "folder" : "file"
+  }));
+}
+
+function getPendingRenamedBundleMainFile(folder: TFolder, oldFolderName: string, attachmentFolderName: string): TFile | null {
+  if (!hasStrictPendingRenamedBundleChildren(folder, oldFolderName, attachmentFolderName)) {
+    return null;
+  }
+
+  const mainFileName = `${oldFolderName}.md`;
+  const child = folder.children.find((entry) => entry instanceof TFile && entry.name === mainFileName);
+  return child instanceof TFile ? child : null;
+}
+
+function hasStrictPendingRenamedBundleChildren(folder: TFolder, oldFolderName: string, attachmentFolderName: string): boolean {
+  const mainFileName = `${oldFolderName}.md`;
+  return folder.children.length === 2
+    && folder.children.some((entry) => entry instanceof TFile && entry.name === mainFileName)
+    && folder.children.some((entry) => entry instanceof TFolder && entry.name === attachmentFolderName);
 }

@@ -26,12 +26,11 @@ The plugin also enhances Obsidian's native Files pane. Recognized bundle folders
 1. Create new bundle documents.
 2. Convert existing Markdown notes into bundle documents.
 3. Keep pasted and dropped attachments inside the current bundle.
-4. Rename, duplicate, move, delete, and repair bundles as whole folders.
+4. Rename, duplicate, move, and delete bundles as whole folders.
 5. Migrate existing local attachments into bundle `assets/` folders and rewrite links.
-6. Preserve a bundle-name alias on each main Markdown file.
-7. Open bundle documents from a quick picker.
-8. Add native Obsidian file-menu actions for common bundle operations.
-9. Mark bundle folders in Obsidian's native Files pane.
+6. Open bundle documents from a quick picker.
+7. Add native Obsidian file-menu actions for common bundle operations.
+8. Mark bundle folders in Obsidian's native Files pane.
 
 ## Usage
 
@@ -50,28 +49,15 @@ When you paste or drop files into `Project Brief.md`, Documents Bundle saves the
 [contract.pdf](./assets/contract.pdf)
 ```
 
-To convert an existing note, open the note and run **Convert current note to bundle**. The plugin moves the note into a same-named folder, creates the assets folder, and rewrites links from other Markdown files that pointed to the old note path.
-
-## Commands
-
-- **New bundle document** creates a bundle in the current context.
-- **Open bundle document** opens a quick picker for all bundles in the vault.
-- **Convert current note to bundle** converts the active Markdown note.
-- **Open current bundle assets folder** opens the assets folder on desktop, or shows the vault path when a system file browser is not available.
-- **Repair current bundle structure** repairs an incomplete bundle folder.
-- **Preview current bundle attachment migration** previews attachment moves for the active bundle.
-- **Migrate current bundle attachments** moves local attachments into the active bundle.
-- **Preview vault attachment migration** creates a migration report for all bundles.
-- **Migrate vault attachments** migrates attachment references across the vault.
-- **Scan bundles** shows a summary of bundles, normal Markdown files, and incomplete candidates.
+To convert an existing note, open the note and run **Convert current note to bundle**. The plugin moves the note into a same-named folder, creates the assets folder, and updates local attachment links inside the moved note when needed.
 
 ## Settings
 
-- **Default attachment folder name** controls the folder used inside each bundle. The default is `assets`.
-- **Paste into normal note** chooses whether pasted attachments should ask to convert the note, auto-convert the note, or use Obsidian's default behavior.
-- **Handle pasted attachments** enables or disables bundle handling for paste events.
-- **Handle dropped attachments** enables or disables bundle handling for editor drop events.
-- **Enhance native File Explorer** marks bundle folders in Obsidian's Files pane and visually hides bundle internals.
+Documents Bundle uses a fixed bundle structure: a same-name Markdown file plus an `assets/` folder. Only folders with this exact structure are recognized as bundles.
+
+- **Handle pasted and dropped attachments in bundles** saves files pasted or dropped into a bundle's main document to that bundle's `assets/` folder and inserts relative links. Normal notes are never intercepted.
+- **Enhance native File Explorer** marks bundle folders in Obsidian's Files pane, hides bundle internals, and opens the main document when the bundle title is clicked.
+- **Bundle marker style** chooses whether bundle folders show no marker, a small icon badge (default), a bold title, or the text `Bundle` badge in Obsidian's Files pane.
 
 ## Mobile support
 

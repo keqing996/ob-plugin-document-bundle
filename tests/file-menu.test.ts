@@ -64,21 +64,15 @@ describe("Obsidian native file menu helpers", () => {
     const menu = new FakeMenu();
 
     addBundleFolderMenuItems(menu, {
-      openBundle: () => calls.push("open:Project"),
       openBundleAssets: () => calls.push("assets:Project/assets"),
-      repairBundle: () => calls.push("repair:Project"),
-      previewAttachmentMigration: () => calls.push("preview:Project"),
       migrateAttachments: () => calls.push("migrate:Project"),
       renameBundle: () => calls.push("rename:Project")
     });
 
     expect(menu.entries[0]).toEqual({ type: "separator" });
     expect(menu.items().map((item) => ({ title: item.title, icon: item.icon }))).toEqual([
-      { title: "Open bundle", icon: "file-text" },
       { title: "Open bundle assets", icon: "folder-open" },
-      { title: "Repair bundle", icon: "wrench" },
-      { title: "Preview attachment migration", icon: "list-checks" },
-      { title: "Migrate attachments", icon: "folder-input" },
+      { title: "Migrate attachments to bundle", icon: "folder-input" },
       { title: "Rename bundle", icon: "pencil" }
     ]);
 
@@ -87,35 +81,30 @@ describe("Obsidian native file menu helpers", () => {
     }
 
     expect(calls).toEqual([
-      "open:Project",
       "assets:Project/assets",
-      "repair:Project",
-      "preview:Project",
       "migrate:Project",
       "rename:Project"
     ]);
   });
 
-  it("adds creation and repair actions for a normal folder", () => {
+  it("adds a creation action for a normal folder", () => {
     const calls: string[] = [];
     const menu = new FakeMenu();
 
     addNormalFolderMenuItems(menu, {
-      createBundleHere: () => calls.push("create:Research"),
-      repairFolderAsBundle: () => calls.push("repair-folder:Research")
+      createBundleHere: () => calls.push("create:Research")
     });
 
     expect(menu.entries[0]).toEqual({ type: "separator" });
     expect(menu.items().map((item) => ({ title: item.title, icon: item.icon }))).toEqual([
-      { title: "New bundle document here", icon: "package-plus" },
-      { title: "Repair folder as bundle", icon: "wrench" }
+      { title: "New bundle document here", icon: "package-plus" }
     ]);
 
     for (const item of menu.items()) {
       item.click();
     }
 
-    expect(calls).toEqual(["create:Research", "repair-folder:Research"]);
+    expect(calls).toEqual(["create:Research"]);
   });
 
   it("adds a convert action for a normal Markdown file", () => {

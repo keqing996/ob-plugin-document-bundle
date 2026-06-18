@@ -23,11 +23,28 @@ describe("bundle model", () => {
   });
 
   it("recognizes folders with same-name markdown and assets", () => {
-    expect(isBundleFolderSnapshot("Work/Meeting", ["Meeting.md", "assets", "exports"])).toBe(true);
+    expect(isBundleFolderSnapshot("Work/Meeting", [
+      { name: "Meeting.md", type: "file" },
+      { name: "assets", type: "folder" }
+    ])).toBe(true);
   });
 
   it("rejects folders missing assets", () => {
     expect(isBundleFolderSnapshot("Work/Meeting", ["Meeting.md"])).toBe(false);
   });
-});
 
+  it("rejects folders with extra direct children", () => {
+    expect(isBundleFolderSnapshot("Note/Note/PP", [
+      { name: "PP.md", type: "file" },
+      { name: "assets", type: "folder" },
+      { name: "不不不", type: "folder" }
+    ])).toBe(false);
+  });
+
+  it("requires the attachment child to be a folder", () => {
+    expect(isBundleFolderSnapshot("Work/Meeting", [
+      { name: "Meeting.md", type: "file" },
+      { name: "assets", type: "file" }
+    ])).toBe(false);
+  });
+});

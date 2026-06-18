@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import DocumentsBundlePlugin from "../main";
+import type { BundleBadgeMode } from "../types";
 
 export class DocumentsBundleSettingTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: DocumentsBundlePlugin) {
@@ -15,53 +16,17 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
       .setHeading();
 
     new Setting(containerEl)
-      .setName(this.plugin.t("settings.defaultAttachmentFolderName.name"))
-      .setDesc(this.plugin.t("settings.defaultAttachmentFolderName.desc"))
-      .addText((text) => {
-        text
-          .setPlaceholder("Assets")
-          .setValue(this.plugin.settings.attachmentFolderName)
-          .onChange(async (value) => {
-            this.plugin.settings.attachmentFolderName = value.trim() || "assets";
-            await this.plugin.saveSettings();
-          });
-      });
+      .setName(this.plugin.t("settings.bundleStructure.name"))
+      .setDesc(this.plugin.t("settings.bundleStructure.desc"));
 
     new Setting(containerEl)
-      .setName(this.plugin.t("settings.pasteIntoNormalNote.name"))
-      .setDesc(this.plugin.t("settings.pasteIntoNormalNote.desc"))
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("ask", this.plugin.t("settings.pasteIntoNormalNote.ask"))
-          .addOption("auto-convert", this.plugin.t("settings.pasteIntoNormalNote.autoConvert"))
-          .addOption("default", this.plugin.t("settings.pasteIntoNormalNote.default"))
-          .setValue(this.plugin.settings.pasteIntoNormalNoteBehavior)
-          .onChange(async (value) => {
-            this.plugin.settings.pasteIntoNormalNoteBehavior = value as "ask" | "auto-convert" | "default";
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName(this.plugin.t("settings.handlePastedAttachments.name"))
-      .setDesc(this.plugin.t("settings.handlePastedAttachments.desc"))
+      .setName(this.plugin.t("settings.handleBundleAttachments.name"))
+      .setDesc(this.plugin.t("settings.handleBundleAttachments.desc"))
       .addToggle((toggle) => {
         toggle
-          .setValue(this.plugin.settings.handlePastedAttachments)
+          .setValue(this.plugin.settings.handleBundleAttachments)
           .onChange(async (value) => {
-            this.plugin.settings.handlePastedAttachments = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName(this.plugin.t("settings.handleDroppedAttachments.name"))
-      .setDesc(this.plugin.t("settings.handleDroppedAttachments.desc"))
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.handleDroppedAttachments)
-          .onChange(async (value) => {
-            this.plugin.settings.handleDroppedAttachments = value;
+            this.plugin.settings.handleBundleAttachments = value;
             await this.plugin.saveSettings();
           });
       });
@@ -74,6 +39,22 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.enhanceNativeFileExplorer)
           .onChange(async (value) => {
             this.plugin.settings.enhanceNativeFileExplorer = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(this.plugin.t("settings.bundleBadgeMode.name"))
+      .setDesc(this.plugin.t("settings.bundleBadgeMode.desc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("none", this.plugin.t("settings.bundleBadgeMode.none"))
+          .addOption("icon", this.plugin.t("settings.bundleBadgeMode.icon"))
+          .addOption("bold", this.plugin.t("settings.bundleBadgeMode.bold"))
+          .addOption("text", this.plugin.t("settings.bundleBadgeMode.text"))
+          .setValue(this.plugin.settings.bundleBadgeMode)
+          .onChange(async (value) => {
+            this.plugin.settings.bundleBadgeMode = value as BundleBadgeMode;
             await this.plugin.saveSettings();
           });
       });

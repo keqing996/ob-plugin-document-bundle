@@ -1,13 +1,13 @@
 import type { Editor, MarkdownView, TFile, Vault } from "obsidian";
 import type DocumentsBundlePlugin from "../main";
-import { getBundleInfoFromMainFilePath } from "../core/bundle";
 import { createAttachmentMarkdownLink } from "../core/links";
 import { getAvailableFilename } from "../core/naming";
 import { formatTimestamp, isImageFilename, joinVaultPath } from "../core/path";
+import { BUNDLE_ASSETS_FOLDER_NAME } from "../settings";
 import { ObsidianBundleFileSystem } from "./fs";
 
 export async function handlePaste(plugin: DocumentsBundlePlugin, event: ClipboardEvent, editor: Editor, view: MarkdownView): Promise<void> {
-  if (!plugin.settings.handlePastedAttachments) {
+  if (!plugin.settings.handleBundleAttachments) {
     return;
   }
 
@@ -24,7 +24,7 @@ export async function handlePaste(plugin: DocumentsBundlePlugin, event: Clipboar
 }
 
 export async function handleDrop(plugin: DocumentsBundlePlugin, event: DragEvent, editor: Editor, view: MarkdownView): Promise<void> {
-  if (!plugin.settings.handleDroppedAttachments) {
+  if (!plugin.settings.handleBundleAttachments) {
     return;
   }
 
@@ -52,32 +52,19 @@ async function handleIncomingFiles(
     return;
   }
 
-  let bundle = getBundleInfoFromMainFilePath(currentFile.path, plugin.settings.attachmentFolderName);
-
-  if (bundle) {
-    event.preventDefault();
-    await plugin.ensureFolder(bundle.assetsFolderPath);
-  } else {
-    if (plugin.settings.pasteIntoNormalNoteBehavior === "default") {
-      return;
-    }
-
-    if (
-      plugin.settings.pasteIntoNormalNoteBehavior === "auto-convert" ||
-      await plugin.confirm(plugin.t("confirm.convertNoteToBundle"))
-    ) {
-      event.preventDefault();
-      bundle = await plugin.convertFileToBundle(currentFile);
-    } else {
-      return;
-    }
+  const bundle = plugin.getBundleInfoForFile(currentFile);
+  if (!bundle) {
+    return;
   }
+
+  event.preventDefault();
+  await plugin.ensureFolder(bundle.assetsFolderPath);
 
   const links: string[] = [];
   for (const file of files) {
     const filename = await writeIncomingFile(plugin.app.vault, bundle.assetsFolderPath, file);
     links.push(createAttachmentMarkdownLink({
-      attachmentFolderName: plugin.settings.attachmentFolderName,
+      attachmentFolderName: BUNDLE_ASSETS_FOLDER_NAME,
       filename,
       isImage: isImageFilename(filename)
     }));

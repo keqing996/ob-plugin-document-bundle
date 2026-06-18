@@ -36,7 +36,7 @@ try {
 
   try {
     await client.send("Runtime.enable");
-    await waitForPluginCommand(client);
+    await waitForPluginLoad(client);
     const result = await verifyPlugin(client);
     console.log(JSON.stringify(result, null, 2));
   } finally {
@@ -161,7 +161,7 @@ async function evaluate(client: DevToolsClient, expression: string): Promise<any
   return result.result.value;
 }
 
-async function waitForPluginCommand(client: DevToolsClient): Promise<void> {
+async function waitForPluginLoad(client: DevToolsClient): Promise<void> {
   let lastState = null;
   for (let index = 0; index < 80; index += 1) {
     const state = await evaluate(client, `(() => {
@@ -173,14 +173,14 @@ async function waitForPluginCommand(client: DevToolsClient): Promise<void> {
         loaded: !!window.app?.plugins?.plugins?.['documents-bundle'],
         enabledPlugins: Array.from(window.app?.plugins?.enabledPlugins || []),
         loadedPlugins: Object.keys(window.app?.plugins?.plugins || {}),
-        hasCoreCommand: !!window.app?.commands?.commands?.['documents-bundle:new-bundle-document'],
+        pluginCommands: Object.keys(window.app?.commands?.commands || {}).filter((id) => id.startsWith('documents-bundle:')),
         hasDeletedExplorerCommand: !!window.app?.commands?.commands?.['documents-bundle:open-documents-bundle-explorer'],
         bodyText: document.body.innerText.slice(0, 500)
       };
     })()`);
     lastState = state;
 
-    if (state.loaded && state.hasCoreCommand && !state.hasDeletedExplorerCommand) {
+    if (state.loaded && state.pluginCommands.length === 0 && !state.hasDeletedExplorerCommand) {
       return;
     }
 
@@ -215,6 +215,7 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
       return entry;
     };
     const commandExists = (id) => !!window.app.commands.commands[id];
+    const pluginCommandIds = () => Object.keys(window.app.commands.commands).filter((id) => id.startsWith('documents-bundle:'));
     const makeIncomingEvent = (propertyName, files) => ({
       [propertyName]: { files },
       prevented: false,
@@ -224,8 +225,11 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     });
 
     assert(!commandExists('documents-bundle:open-documents-bundle-explorer'), 'Deleted custom explorer command is still registered.');
+    assert(pluginCommandIds().length === 0, 'Documents Bundle should not register Obsidian commands: ' + pluginCommandIds().join(', '));
     assert(window.app.workspace.getLeavesOfType('documents-bundle-explorer').length === 0, 'Deleted custom explorer view still has leaves.');
     assert(plugin.settings.enhanceNativeFileExplorer === true, 'Native File Explorer enhancement should default to enabled.');
+    assert(plugin.settings.handleBundleAttachments === true, 'Bundle attachment handling should default to enabled.');
+    assert(plugin.settings.bundleBadgeMode === 'icon', 'Bundle marker style should default to the small icon badge.');
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     window.app.workspace.leftSplit?.expand?.();
@@ -250,6 +254,7 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
       .some((title) => title.dataset.documentsBundlePath === 'Regular Folder' || title.innerText.trim() === 'Regular Folder');
 
     assert(existingNativeTitle, 'Existing Bundle was not marked in the native Files pane.');
+    assert(existingNativeTitle.dataset.documentsBundleBadge === 'icon', 'Existing Bundle should use the default icon badge mode.');
     assert(!regularFolderMarked, 'Regular Folder was incorrectly marked as a Bundle.');
     const existingBundleDisclosureIcon = existingNativeTitle.querySelector('.nav-folder-collapse-indicator, .collapse-icon');
     const existingBundleDisclosureHidden = !existingBundleDisclosureIcon || getComputedStyle(existingBundleDisclosureIcon).display === 'none';
@@ -292,26 +297,17 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
 
     const scan = plugin.scanBundles();
 
-    window.app.commands.executeCommandById('documents-bundle:preview-vault-attachment-migration');
+    await plugin.previewVaultAttachmentMigration();
     await sleep(1500);
 
     const reportFiles = window.app.vault.getMarkdownFiles()
       .map((file) => file.path)
       .filter((path) => path.startsWith('Documents Bundle Reports/'));
 
-    const openBundleCommandExists = commandExists('documents-bundle:open-bundle-document');
     const bundleSuggestionItems = plugin.getAllBundleInfos().map((bundle) => bundle.folderPath);
-    window.app.commands.executeCommandById('documents-bundle:open-bundle-document');
-    await sleep(500);
-    const bundleQuickSwitcherSuggestions = [...document.querySelectorAll('.suggestion-item')]
-      .map((item) => item.innerText.trim())
-      .filter(Boolean);
-    const bundleQuickSwitcherModalVisible = bundleQuickSwitcherSuggestions.length > 0;
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await sleep(100);
     await plugin.openBundle('Shared Attachment/Alpha');
     await sleep(500);
-    const bundleQuickSwitcherOpenedAlpha = window.app.workspace.getActiveFile()?.path === 'Shared Attachment/Alpha/Alpha.md';
+    const openedAlpha = window.app.workspace.getActiveFile()?.path === 'Shared Attachment/Alpha/Alpha.md';
 
     const editorLeaf = window.app.workspace.getLeaf('tab');
     await editorLeaf.openFile(file('Existing Bundle/Existing Bundle.md'));
@@ -342,65 +338,22 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     await sleep(500);
     const normalNoteView = normalNoteLeaf.view;
     assert(normalNoteView?.editor && normalNoteView?.file?.path === 'Standalone.md', 'Could not open Standalone.md in a Markdown editor.');
-    const previousPasteBehavior = plugin.settings.pasteIntoNormalNoteBehavior;
-    plugin.settings.pasteIntoNormalNoteBehavior = 'auto-convert';
     const normalPasteEvent = makeIncomingEvent('clipboardData', [
       new File(['normal note paste image'], 'standalone-lifecycle.png', { type: 'image/png' })
     ]);
-    try {
-      window.app.workspace.trigger('editor-paste', normalPasteEvent, normalNoteView.editor, normalNoteView);
-      await sleep(1000);
-    } finally {
-      plugin.settings.pasteIntoNormalNoteBehavior = previousPasteBehavior;
-    }
-    assert(normalPasteEvent.prevented, 'Normal-note editor-paste auto-convert event was not prevented by the plugin.');
-    assert(pathExists('Standalone/Standalone.md'), 'Normal-note editor-paste did not convert the note into a bundle.');
-    assert(pathExists('Standalone/assets/standalone-lifecycle.png'), 'Normal-note editor-paste did not create attachment in converted bundle assets.');
-    assert(!pathExists('Standalone.md'), 'Normal-note editor-paste left the original standalone markdown at root.');
-
-    const askNoteLeaf = window.app.workspace.getLeaf('tab');
-    await askNoteLeaf.openFile(file('Regular Folder/Loose Note.md'));
+    window.app.workspace.trigger('editor-paste', normalPasteEvent, normalNoteView.editor, normalNoteView);
     await sleep(500);
-    const askNoteView = askNoteLeaf.view;
-    assert(askNoteView?.editor && askNoteView?.file?.path === 'Regular Folder/Loose Note.md', 'Could not open Loose Note.md in a Markdown editor.');
-    const askCancelEvent = makeIncomingEvent('clipboardData', [
-      new File(['ask cancel image'], 'ask-cancel.png', { type: 'image/png' })
-    ]);
-    const previousConfirmForAsk = plugin.confirm;
-    let askPromptCount = 0;
-    plugin.confirm = async () => {
-      askPromptCount += 1;
-      return false;
-    };
-    try {
-      window.app.workspace.trigger('editor-paste', askCancelEvent, askNoteView.editor, askNoteView);
-      await sleep(500);
-    } finally {
-      plugin.confirm = previousConfirmForAsk;
-    }
-    assert(askPromptCount === 1, 'Normal-note ask cancel did not show a confirmation prompt.');
-    assert(!askCancelEvent.prevented, 'Normal-note ask cancel should not prevent Obsidian default paste.');
-    assert(pathExists('Regular Folder/Loose Note.md'), 'Normal-note ask cancel unexpectedly converted the note.');
-    assert(!pathExists('Regular Folder/Loose Note/assets/ask-cancel.png'), 'Normal-note ask cancel unexpectedly wrote an attachment.');
+    assert(!normalPasteEvent.prevented, 'Normal-note editor-paste should not be intercepted by the plugin.');
+    assert(pathExists('Standalone.md'), 'Normal-note editor-paste unexpectedly converted the note into a bundle.');
+    assert(!pathExists('Standalone/assets/standalone-lifecycle.png'), 'Normal-note editor-paste unexpectedly wrote attachment into bundle assets.');
 
-    const askConfirmEvent = makeIncomingEvent('clipboardData', [
-      new File(['ask confirm image'], 'ask-confirm.png', { type: 'image/png' })
+    const normalDropEvent = makeIncomingEvent('dataTransfer', [
+      new File(['normal note drop pdf'], 'standalone-drop.pdf', { type: 'application/pdf' })
     ]);
-    plugin.confirm = async () => {
-      askPromptCount += 1;
-      return true;
-    };
-    try {
-      window.app.workspace.trigger('editor-paste', askConfirmEvent, askNoteView.editor, askNoteView);
-      await sleep(1000);
-    } finally {
-      plugin.confirm = previousConfirmForAsk;
-    }
-    assert(askPromptCount === 2, 'Normal-note ask confirm did not show a second confirmation prompt.');
-    assert(askConfirmEvent.prevented, 'Normal-note ask confirm event was not prevented by the plugin.');
-    assert(pathExists('Regular Folder/Loose Note/Loose Note.md'), 'Normal-note ask confirm did not convert the note into a bundle.');
-    assert(pathExists('Regular Folder/Loose Note/assets/ask-confirm.png'), 'Normal-note ask confirm did not write attachment into converted bundle assets.');
-    assert(!pathExists('Regular Folder/Loose Note.md'), 'Normal-note ask confirm left the original markdown in place.');
+    window.app.workspace.trigger('editor-drop', normalDropEvent, normalNoteView.editor, normalNoteView);
+    await sleep(500);
+    assert(!normalDropEvent.prevented, 'Normal-note editor-drop should not be intercepted by the plugin.');
+    assert(!pathExists('Standalone/assets/standalone-drop.pdf'), 'Normal-note editor-drop unexpectedly wrote attachment into bundle assets.');
 
     await plugin.duplicateBundle('Existing Bundle');
     await sleep(250);
@@ -422,34 +375,21 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     await sleep(250);
     assert(!pathExists('Regular Folder/Existing Bundle copy'), 'Deleted bundle still exists.');
 
-    await plugin.repairBundleFolder(folder('Repair Cases/Missing Assets'));
-    await plugin.repairBundleFolder(folder('Repair Cases/Index Named'));
-    await plugin.repairBundleFolder(folder('Repair Cases/Empty Candidate'));
-    await sleep(500);
-    assert(pathExists('Repair Cases/Missing Assets/assets'), 'Missing Assets repair did not create assets folder.');
-    assert((await readText('Repair Cases/Missing Assets/Missing Assets.md')).includes('  - "Missing Assets"'), 'Missing Assets repair did not add a bundle alias.');
-    assert(pathExists('Repair Cases/Index Named/Index Named.md'), 'Index Named repair did not rename main file.');
-    assert(!pathExists('Repair Cases/Index Named/index.md'), 'Index Named old index.md still exists.');
-    assert((await readText('Repair Cases/Index Named/Index Named.md')).includes('  - "Index Named"'), 'Index Named repair did not add a bundle alias.');
-    assert(pathExists('Repair Cases/Empty Candidate/Empty Candidate.md'), 'Empty Candidate repair did not create main file.');
-    assert(pathExists('Repair Cases/Empty Candidate/assets'), 'Empty Candidate repair did not create assets folder.');
-    assert((await readText('Repair Cases/Empty Candidate/Empty Candidate.md')).includes('  - "Empty Candidate"'), 'Empty Candidate repair did not add a bundle alias.');
-
     await plugin.convertFileToBundle(file('Conversion Links/Plan.md'));
     await sleep(500);
     assert(pathExists('Conversion Links/Plan/Plan.md'), 'Converted bundle main file missing.');
     assert(pathExists('Conversion Links/Plan/assets'), 'Converted bundle assets folder missing.');
     assert(!pathExists('Conversion Links/Plan.md'), 'Original converted markdown file still exists.');
-    assert((await readText('Conversion Links/Plan/Plan.md')).includes('  - "Plan"'), 'Converted bundle did not add a bundle alias.');
     const indexContent = await readText('Conversion Links/Index.md');
-    assert(indexContent.includes('[Plan](./Plan/Plan.md)'), 'Markdown document link was not rewritten after conversion.');
-    assert(indexContent.includes('[[Conversion Links/Plan/Plan|Plan wiki link]]'), 'Wiki document link was not rewritten after conversion.');
+    assert(indexContent.includes('[Plan](Plan.md)'), 'Conversion should not rewrite markdown document links in other notes.');
+    assert(indexContent.includes('[[Plan|Plan wiki link]]'), 'Conversion should not rewrite wiki document links in other notes.');
 
-    plugin.confirm = async () => true;
+    const previousConfirmAttachmentMigration = plugin.confirmAttachmentMigration;
+    plugin.confirmAttachmentMigration = async () => true;
     try {
       await plugin.migrateCurrentBundleAttachments(file('Legacy Attachments/Project/Project.md'));
     } finally {
-      plugin.confirm = previousConfirm;
+      plugin.confirmAttachmentMigration = previousConfirmAttachmentMigration;
     }
     await sleep(500);
     assert(pathExists('Legacy Attachments/Project/assets/diagram.png'), 'Current migration did not move diagram.png.');
@@ -490,6 +430,7 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     return {
       nativeFileExplorer: {
         deletedCommandAbsent: !commandExists('documents-bundle:open-documents-bundle-explorer'),
+        noRegisteredCommands: pluginCommandIds().length === 0,
         markedBundlePaths,
         nativeBundleTitles,
         postMutationMarkedBundles,
@@ -502,20 +443,15 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
       },
       scan,
       reportFiles,
-      bundleQuickSwitcher: {
-        commandExists: openBundleCommandExists,
+      bundleRegistry: {
         items: bundleSuggestionItems,
-        modalVisible: bundleQuickSwitcherModalVisible,
-        suggestions: bundleQuickSwitcherSuggestions,
-        openedAlpha: bundleQuickSwitcherOpenedAlpha
+        openedAlpha
       },
       operations: {
         editorPasteLifecycle: true,
         editorDropLifecycle: true,
-        normalNoteAutoConvertLifecycle: true,
-        normalNoteAskCancelLifecycle: true,
-        normalNoteAskConfirmLifecycle: true,
-        repairedBundles: 3,
+        normalNotePasteIgnored: true,
+        normalNoteDropIgnored: true,
         convertedPlan: true,
         currentBundleMigrationMoved: 3,
         vaultMigrationMovedOrCopied: 2,
@@ -524,6 +460,7 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     };
   })()`);
   assert(result.nativeFileExplorer.deletedCommandAbsent, "Deleted custom explorer command is still present.");
+  assert(result.nativeFileExplorer.noRegisteredCommands, "Documents Bundle registered Obsidian commands.");
   assert(result.nativeFileExplorer.markedBundlePaths.includes("Existing Bundle"), "Native Files pane did not mark Existing Bundle.");
   assert(!result.nativeFileExplorer.regularFolderMarked, "Native Files pane incorrectly marked Regular Folder.");
   assert(result.nativeFileExplorer.existingBundleDisclosureHidden, "Native Files pane did not hide the Bundle disclosure icon.");
@@ -532,18 +469,14 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
   assert(result.nativeFileExplorer.clickOpenedExisting, "Native Files pane Bundle title click did not open the main Markdown file.");
   assert(result.nativeFileExplorer.existingBundleTitleActive, "Native Files pane Bundle title did not show active state.");
   assert(result.scan.bundles === 4, `Expected 4 bundles, got ${result.scan.bundles}.`);
-  assert(result.scan.incompleteCandidates === 2, `Expected 2 incomplete bundle candidates, got ${result.scan.incompleteCandidates}.`);
+  assert(result.scan.incompleteCandidates === 0, `Expected 0 incomplete bundle candidates, got ${result.scan.incompleteCandidates}.`);
   assert(result.reportFiles.length > 0, "Vault attachment migration dry-run did not create a report.");
-  assert(result.bundleQuickSwitcher.commandExists, "Open bundle document command was not registered.");
-  assert(result.bundleQuickSwitcher.items.includes("Existing Bundle"), "Bundle quick switcher list did not include Existing Bundle.");
-  assert(result.bundleQuickSwitcher.items.includes("Shared Attachment/Alpha"), "Bundle quick switcher list did not include nested Alpha bundle.");
-  assert(result.bundleQuickSwitcher.modalVisible, "Open bundle document command did not show bundle suggestions.");
-  assert(result.bundleQuickSwitcher.suggestions.some((text: string) => text.includes("Existing Bundle")), "Bundle quick switcher modal did not render Existing Bundle.");
-  assert(!result.bundleQuickSwitcher.suggestions.some((text: string) => text.includes("assets")), "Bundle quick switcher modal exposed assets folders.");
-  assert(result.bundleQuickSwitcher.openedAlpha, "Bundle quick switcher open path did not open Alpha bundle main file.");
-  assert(result.operations.postMutationScan.bundles === 10, `Expected 10 bundles after normal-note conversions, repair, and conversion operations, got ${result.operations.postMutationScan.bundles}.`);
-  assert(result.operations.postMutationScan.markdownFiles === 2, `Expected 2 normal markdown files after normal-note conversions, got ${result.operations.postMutationScan.markdownFiles}.`);
-  assert(result.operations.postMutationScan.incompleteCandidates === 0, `Expected 0 incomplete candidates after repairs, got ${result.operations.postMutationScan.incompleteCandidates}.`);
+  assert(result.bundleRegistry.items.includes("Existing Bundle"), "Bundle registry did not include Existing Bundle.");
+  assert(result.bundleRegistry.items.includes("Shared Attachment/Alpha"), "Bundle registry did not include nested Alpha bundle.");
+  assert(result.bundleRegistry.openedAlpha, "Direct bundle open path did not open Alpha bundle main file.");
+  assert(result.operations.postMutationScan.bundles === 5, `Expected 5 bundles after conversion operations, got ${result.operations.postMutationScan.bundles}.`);
+  assert(result.operations.postMutationScan.markdownFiles === 3, `Expected 3 normal markdown files after conversion operations, got ${result.operations.postMutationScan.markdownFiles}.`);
+  assert(result.operations.postMutationScan.incompleteCandidates === 0, `Expected 0 incomplete candidates after operations, got ${result.operations.postMutationScan.incompleteCandidates}.`);
 
   return result;
 }

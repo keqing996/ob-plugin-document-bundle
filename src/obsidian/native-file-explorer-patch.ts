@@ -1,18 +1,21 @@
-import { Platform, TFolder, type App } from "obsidian";
-import { getBundleInfoFromFolderPath, isBundleFolderSnapshot } from "../core/bundle";
-import { basename } from "../core/path";
+import { Platform, setIcon, TFolder, type App } from "obsidian";
+import { getBundleInfoFromFolderPath, isBundleFolderSnapshot, type BundleFolderChildSnapshot } from "../core/bundle";
 import type { Translate } from "../i18n";
+import type { BundleBadgeMode } from "../types";
 
 export const NATIVE_BUNDLE_CLASS = "documents-bundle-native-bundle";
 export const NATIVE_BUNDLE_TITLE_CLASS = "documents-bundle-native-bundle-title";
 export const NATIVE_BUNDLE_TITLE_ACTIVE_CLASS = "documents-bundle-native-bundle-title-active";
 export const NATIVE_BUNDLE_CHILDREN_CLASS = "documents-bundle-native-bundle-children";
+export const NATIVE_BUNDLE_ICON_CLASS = "documents-bundle-native-bundle-icon";
+const NATIVE_BUNDLE_ICON_ID = "package";
 
 type OpenBundle = (folderPath: string) => Promise<void>;
 
 interface NativeFileExplorerPatchOptions {
   app: App;
   attachmentFolderName: string;
+  badgeMode: BundleBadgeMode;
   openBundle: OpenBundle;
   t: Translate;
 }
@@ -47,10 +50,14 @@ export class NativeFileExplorerPatch {
     this.listeners.clear();
 
     const doc = getActiveDocument();
+    for (const icon of Array.from(doc.querySelectorAll(`.${NATIVE_BUNDLE_ICON_CLASS}`))) {
+      icon.remove();
+    }
     for (const element of Array.from(doc.querySelectorAll(`.${NATIVE_BUNDLE_CLASS}, .${NATIVE_BUNDLE_TITLE_CLASS}, .${NATIVE_BUNDLE_TITLE_ACTIVE_CLASS}, .${NATIVE_BUNDLE_CHILDREN_CLASS}`))) {
       element.classList.remove(NATIVE_BUNDLE_CLASS, NATIVE_BUNDLE_TITLE_CLASS, NATIVE_BUNDLE_TITLE_ACTIVE_CLASS, NATIVE_BUNDLE_CHILDREN_CLASS);
       delete (element as HTMLElement).dataset.documentsBundlePath;
       delete (element as HTMLElement).dataset.documentsBundleLabel;
+      delete (element as HTMLElement).dataset.documentsBundleBadge;
     }
   }
 
@@ -91,7 +98,7 @@ export class NativeFileExplorerPatch {
     getFolderChildrenElement(node)?.classList.add(NATIVE_BUNDLE_CHILDREN_CLASS);
     (node as HTMLElement).dataset.documentsBundlePath = folderPath;
     (title as HTMLElement).dataset.documentsBundlePath = folderPath;
-    (title as HTMLElement).dataset.documentsBundleLabel = this.options.t("badge.bundle");
+    this.updateBundleBadge(title);
     this.updateBundleActiveState(title, folderPath);
 
     if (this.listeners.has(title)) {
@@ -119,11 +126,30 @@ export class NativeFileExplorerPatch {
     delete (node as HTMLElement).dataset.documentsBundlePath;
     delete (title as HTMLElement).dataset.documentsBundlePath;
     delete (title as HTMLElement).dataset.documentsBundleLabel;
+    delete (title as HTMLElement).dataset.documentsBundleBadge;
+    removeBundleIconElement(title);
 
     const listener = this.listeners.get(title);
     if (listener) {
       title.removeEventListener("click", listener, true);
       this.listeners.delete(title);
+    }
+  }
+
+  private updateBundleBadge(title: Element): void {
+    const titleEl = title as HTMLElement;
+    titleEl.dataset.documentsBundleLabel = this.options.t("badge.bundle");
+    titleEl.dataset.documentsBundleBadge = this.options.badgeMode;
+
+    if (this.options.badgeMode !== "icon") {
+      removeBundleIconElement(title);
+      return;
+    }
+
+    const icon = ensureBundleIconElement(title);
+    if (icon.dataset.documentsBundleIcon !== NATIVE_BUNDLE_ICON_ID) {
+      icon.dataset.documentsBundleIcon = NATIVE_BUNDLE_ICON_ID;
+      setIcon(icon, NATIVE_BUNDLE_ICON_ID);
     }
   }
 
@@ -142,8 +168,7 @@ export class NativeFileExplorerPatch {
           continue;
         }
 
-        const childNames = child.children.map((entry) => entry.name);
-        if (isBundleFolderSnapshot(child.path, childNames, this.options.attachmentFolderName)) {
+        if (isBundleFolderSnapshot(child.path, getBundleFolderChildSnapshots(child), this.options.attachmentFolderName)) {
           bundlePaths.add(child.path);
         } else {
           walk(child);
@@ -169,14 +194,7 @@ export function getFolderPathFromNativeNode(node: Element, title: Element, bundl
       }
     }
   }
-
-  const titleText = getFolderTitleText(title);
-  if (!titleText) {
-    return null;
-  }
-
-  const matches = [...bundlePaths].filter((path) => basename(path) === titleText);
-  return matches.length === 1 ? matches[0] : null;
+  return null;
 }
 
 function getFolderTitleElement(node: Element): Element | null {
@@ -191,8 +209,25 @@ function getFolderChildrenElement(node: Element): Element | null {
     || node.querySelector(".nav-folder-children, .tree-item-children");
 }
 
-function getFolderTitleText(title: Element): string {
-  return (title.querySelector(".nav-folder-title-content")?.textContent || title.textContent || "").trim();
+function ensureBundleIconElement(title: Element): HTMLElement {
+  const existingIcon = getBundleIconElement(title);
+  if (existingIcon) {
+    return existingIcon;
+  }
+
+  const icon = (title.ownerDocument ?? getActiveDocument()).createElement("span");
+  icon.classList.add(NATIVE_BUNDLE_ICON_CLASS);
+  icon.setAttribute("aria-hidden", "true");
+  title.appendChild(icon);
+  return icon;
+}
+
+function removeBundleIconElement(title: Element): void {
+  getBundleIconElement(title)?.remove();
+}
+
+function getBundleIconElement(title: Element): HTMLElement | null {
+  return title.querySelector(`.${NATIVE_BUNDLE_ICON_CLASS}`);
 }
 
 function shouldLetNativeFolderClickContinue(event: MouseEvent): boolean {
@@ -202,4 +237,11 @@ function shouldLetNativeFolderClickContinue(event: MouseEvent): boolean {
 
   const target = event.target instanceof Element ? event.target : null;
   return Boolean(target?.closest(".nav-folder-collapse-indicator, .tree-item-icon, .collapse-icon"));
+}
+
+function getBundleFolderChildSnapshots(folder: TFolder): BundleFolderChildSnapshot[] {
+  return folder.children.map((child) => ({
+    name: child.name,
+    type: child instanceof TFolder ? "folder" : "file"
+  }));
 }

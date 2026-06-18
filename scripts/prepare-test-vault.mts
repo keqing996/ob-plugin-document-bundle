@@ -29,14 +29,6 @@ await mkdir(resolve(vaultRoot, "Regular Folder"), { recursive: true });
 await writeFile(resolve(vaultRoot, "Regular Folder", "Loose Note.md"), "# Loose Note\n\n");
 await writeFile(resolve(vaultRoot, "Standalone.md"), "# Standalone\n\n");
 
-await mkdir(resolve(vaultRoot, "Repair Cases", "Missing Assets"), { recursive: true });
-await writeFile(resolve(vaultRoot, "Repair Cases", "Missing Assets", "Missing Assets.md"), "# Missing Assets\n\n");
-
-await mkdir(resolve(vaultRoot, "Repair Cases", "Index Named", "assets"), { recursive: true });
-await writeFile(resolve(vaultRoot, "Repair Cases", "Index Named", "index.md"), "# Index Named\n\n");
-
-await mkdir(resolve(vaultRoot, "Repair Cases", "Empty Candidate"), { recursive: true });
-
 await mkdir(resolve(vaultRoot, "Legacy Attachments", "Project", "assets"), { recursive: true });
 await mkdir(resolve(vaultRoot, "Legacy Attachments", "External"), { recursive: true });
 await writeFile(

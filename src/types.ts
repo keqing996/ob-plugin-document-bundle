@@ -1,11 +1,9 @@
+export type BundleBadgeMode = "none" | "icon" | "bold" | "text";
+
 export interface DocumentsBundleSettings {
-  attachmentFolderName: string;
-  handlePastedAttachments: boolean;
-  handleDroppedAttachments: boolean;
-  pasteIntoNormalNoteBehavior: "ask" | "auto-convert" | "default";
+  handleBundleAttachments: boolean;
   enhanceNativeFileExplorer: boolean;
-  imageFilenamePattern: string;
-  useRelativeMarkdownLinks: boolean;
+  bundleBadgeMode: BundleBadgeMode;
 }
 
 export interface BundleInfo {

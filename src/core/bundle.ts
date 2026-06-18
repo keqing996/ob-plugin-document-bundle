@@ -57,8 +57,25 @@ export function getBundleInfoFromMainFilePath(mainFilePath: string, attachmentFo
   };
 }
 
-export function isBundleFolderSnapshot(folderPath: string, childNames: string[], attachmentFolderName = "assets"): boolean {
+export type BundleFolderChildSnapshot =
+  | string
+  | {
+      name: string;
+      type: "file" | "folder";
+    };
+
+export function isBundleFolderSnapshot(folderPath: string, children: BundleFolderChildSnapshot[], attachmentFolderName = "assets"): boolean {
   const folderName = basename(folderPath);
-  return childNames.includes(`${folderName}.md`) && childNames.includes(attachmentFolderName);
+  const expectedMainName = `${folderName}.md`;
+  return children.length === 2
+    && children.some((child) => childSnapshotName(child) === expectedMainName && childSnapshotType(child) !== "folder")
+    && children.some((child) => childSnapshotName(child) === attachmentFolderName && childSnapshotType(child) !== "file");
 }
 
+function childSnapshotName(child: BundleFolderChildSnapshot): string {
+  return typeof child === "string" ? child : child.name;
+}
+
+function childSnapshotType(child: BundleFolderChildSnapshot): "file" | "folder" | null {
+  return typeof child === "string" ? null : child.type;
+}

@@ -1,60 +1,45 @@
-import { basename, dirname, extname, joinVaultPath, normalizeVaultPath, stripMarkdownExtension } from "./path";
-
-export interface DocumentLinkMove {
-  oldPath: string;
-  newPath: string;
-}
-
-export interface DocumentLinkRewriteInput {
-  notePath: string;
-  content: string;
-  moves: DocumentLinkMove[];
-}
+import { dirname, extname, joinVaultPath, normalizeVaultPath } from "./path";
 
 export interface DocumentLinkRewriteResult {
   updatedContent: string;
   replacements: number;
 }
 
-type ParsedDocumentLink =
-  | {
-      kind: "markdown";
-      start: number;
-      end: number;
-      target: string;
-      prefix: string;
-      suffix: string;
-    }
-  | {
-      kind: "wiki";
-      start: number;
-      end: number;
-      target: string;
-      alias: string;
-      embed: boolean;
-    };
+export interface MovedFileAttachmentLinkRewriteInput {
+  oldNotePath: string;
+  newNotePath: string;
+  content: string;
+}
 
-export function rewriteDocumentLinks(input: DocumentLinkRewriteInput): DocumentLinkRewriteResult {
-  const noteDir = dirname(input.notePath);
-  const moves = input.moves.map((move) => ({
-    oldPath: normalizeVaultPath(move.oldPath),
-    newPath: normalizeVaultPath(move.newPath),
-    oldWikiPath: stripMarkdownExtension(normalizeVaultPath(move.oldPath)),
-    newWikiPath: stripMarkdownExtension(normalizeVaultPath(move.newPath)),
-    oldBasename: stripMarkdownExtension(basename(move.oldPath))
-  }));
+interface ParsedMarkdownLink {
+  start: number;
+  end: number;
+  target: string;
+  prefix: string;
+  suffix: string;
+}
+
+export function rewriteAttachmentLinksForMovedFile(input: MovedFileAttachmentLinkRewriteInput): DocumentLinkRewriteResult {
+  const oldNoteDir = dirname(input.oldNotePath);
+  const newNoteDir = dirname(input.newNotePath);
   const replacements: Array<{ start: number; end: number; value: string }> = [];
 
-  for (const link of parseDocumentLinks(input.content)) {
-    const matchedMove = moves.find((move) => linkMatchesMove(link, noteDir, move));
-    if (!matchedMove) {
+  for (const link of parseMarkdownLinks(input.content)) {
+    const reference = splitTargetReference(link.target);
+    if (!isLocalRelativeTarget(reference.path) || !isAttachmentTarget(reference.path)) {
+      continue;
+    }
+
+    const resolvedTarget = resolveMarkdownPath(oldNoteDir, reference.path);
+    const nextTarget = `${toRelativeMarkdownTarget(newNoteDir, resolvedTarget)}${reference.reference}`;
+    if (nextTarget === link.target) {
       continue;
     }
 
     replacements.push({
       start: link.start,
       end: link.end,
-      value: renderDocumentLinkReplacement(link, noteDir, matchedMove.newPath, matchedMove.newWikiPath)
+      value: `${link.prefix}${nextTarget}${link.suffix}`
     });
   }
 
@@ -64,31 +49,17 @@ export function rewriteDocumentLinks(input: DocumentLinkRewriteInput): DocumentL
   };
 }
 
-function parseDocumentLinks(content: string): ParsedDocumentLink[] {
-  return [...parseMarkdownDocumentLinks(content), ...parseWikiDocumentLinks(content)]
-    .sort((a, b) => a.start - b.start);
-}
-
-function parseMarkdownDocumentLinks(content: string): ParsedDocumentLink[] {
-  const links: ParsedDocumentLink[] = [];
+function parseMarkdownLinks(content: string): ParsedMarkdownLink[] {
+  const links: ParsedMarkdownLink[] = [];
   const regex = /(!?)\[([^\]\n]*)\]\(([^)\n]+)\)/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(content)) !== null) {
-    if (match[1] === "!") {
-      continue;
-    }
-
     const full = match[0];
     const rawTarget = match[3].trim();
-    if (!isDocumentTarget(rawTarget)) {
-      continue;
-    }
-
     const targetStart = full.indexOf(rawTarget);
     const targetEnd = targetStart + rawTarget.length;
     links.push({
-      kind: "markdown",
       start: match.index,
       end: match.index + full.length,
       target: rawTarget,
@@ -100,67 +71,8 @@ function parseMarkdownDocumentLinks(content: string): ParsedDocumentLink[] {
   return links;
 }
 
-function parseWikiDocumentLinks(content: string): ParsedDocumentLink[] {
-  const links: ParsedDocumentLink[] = [];
-  const regex = /(!?)\[\[([^\]\n]+)\]\]/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(content)) !== null) {
-    if (match[1] === "!") {
-      continue;
-    }
-
-    const body = match[2];
-    const [rawTarget, alias = ""] = body.split("|");
-    const target = rawTarget.trim();
-    if (!target || target.startsWith("#") || hasKnownNonDocumentExtension(target)) {
-      continue;
-    }
-
-    links.push({
-      kind: "wiki",
-      start: match.index,
-      end: match.index + match[0].length,
-      target,
-      alias: alias.trim(),
-      embed: false
-    });
-  }
-
-  return links;
-}
-
-function linkMatchesMove(
-  link: ParsedDocumentLink,
-  noteDir: string,
-  move: { oldPath: string; oldWikiPath: string; oldBasename: string }
-): boolean {
-  if (link.kind === "markdown") {
-    return resolveMarkdownTarget(noteDir, link.target) === move.oldPath;
-  }
-
-  const target = stripAnchor(link.target);
-  const normalizedTarget = normalizeDotSegments(target);
-  return normalizedTarget === move.oldWikiPath || normalizedTarget === move.oldPath || normalizedTarget === move.oldBasename;
-}
-
-function renderDocumentLinkReplacement(
-  link: ParsedDocumentLink,
-  noteDir: string,
-  newPath: string,
-  newWikiPath: string
-): string {
-  if (link.kind === "markdown") {
-    return `${link.prefix}${toRelativeMarkdownTarget(noteDir, newPath)}${link.suffix}`;
-  }
-
-  const alias = link.alias ? `|${link.alias}` : "";
-  return `[[${newWikiPath}${alias}]]`;
-}
-
-function resolveMarkdownTarget(noteDir: string, target: string): string {
-  const stripped = stripAnchor(target);
-  const decoded = decodeLinkTarget(stripped);
+function resolveMarkdownPath(noteDir: string, path: string): string {
+  const decoded = decodeLinkTarget(path);
   if (decoded.startsWith("./") || decoded.startsWith("../")) {
     return normalizeDotSegments(joinVaultPath(noteDir, decoded));
   }
@@ -182,16 +94,6 @@ function toRelativeMarkdownTarget(noteDir: string, targetPath: string): string {
   return relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
 }
 
-function isDocumentTarget(target: string): boolean {
-  const stripped = stripAnchor(target).trim();
-  return stripped.length > 0 && !/^[a-z][a-z0-9+.-]*:/i.test(stripped) && extname(stripped) === ".md";
-}
-
-function hasKnownNonDocumentExtension(target: string): boolean {
-  const extension = extname(stripAnchor(target));
-  return extension.length > 0 && extension !== ".md";
-}
-
 function applyReplacements(content: string, replacements: Array<{ start: number; end: number; value: string }>): string {
   let updated = content;
   for (const replacement of replacements.sort((a, b) => b.start - a.start)) {
@@ -201,8 +103,31 @@ function applyReplacements(content: string, replacements: Array<{ start: number;
   return updated;
 }
 
-function stripAnchor(target: string): string {
-  return target.split("#")[0].split("^")[0];
+function splitTargetReference(target: string): { path: string; reference: string } {
+  const headingIndex = target.indexOf("#");
+  const blockIndex = target.indexOf("^");
+  const indexes = [headingIndex, blockIndex].filter((index) => index > -1);
+  if (indexes.length === 0) {
+    return { path: target, reference: "" };
+  }
+
+  const index = Math.min(...indexes);
+  return {
+    path: target.slice(0, index),
+    reference: target.slice(index)
+  };
+}
+
+function isLocalRelativeTarget(path: string): boolean {
+  const trimmed = path.trim();
+  return trimmed.length > 0
+    && !trimmed.startsWith("/")
+    && !/^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+}
+
+function isAttachmentTarget(path: string): boolean {
+  const extension = extname(path);
+  return extension.length > 0 && extension !== ".md";
 }
 
 function decodeLinkTarget(target: string): string {
@@ -228,4 +153,3 @@ function normalizeDotSegments(path: string): string {
 
   return segments.join("/");
 }
-

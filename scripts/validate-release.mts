@@ -58,9 +58,6 @@ if (manifest.id !== "documents-bundle") {
 if (manifest.name !== "Documents Bundle") {
   throw new Error(`Unexpected plugin display name: ${manifest.name}`);
 }
-if (manifest.version !== "1.0.1") {
-  throw new Error(`Unexpected release version: ${manifest.version}`);
-}
 if (manifest.minAppVersion !== "1.8.7") {
   throw new Error(`Unexpected minimum app version: ${manifest.minAppVersion}`);
 }

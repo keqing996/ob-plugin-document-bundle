@@ -22,7 +22,7 @@ if (electronRequireMatches.length !== 1) {
 }
 
 const openAssetsStart = mainTs.indexOf("async openAssetsFolder(");
-const openAssetsEnd = mainTs.indexOf("\n  async repairBundleFolder", openAssetsStart);
+const openAssetsEnd = mainTs.indexOf("\n  getBundleInfoForFile", openAssetsStart);
 if (openAssetsStart === -1 || openAssetsEnd === -1) {
   throw new Error("Could not locate openAssetsFolder method in src/main.ts.");
 }

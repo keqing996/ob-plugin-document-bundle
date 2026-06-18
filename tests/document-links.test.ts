@@ -1,61 +1,25 @@
-import { rewriteDocumentLinks } from "../src/core/document-links";
+import { rewriteAttachmentLinksForMovedFile } from "../src/core/document-links";
 
-describe("document link rewrites", () => {
-  it("rewrites markdown links to moved bundle main documents", () => {
-    const result = rewriteDocumentLinks({
-      notePath: "Work/Index.md",
-      content: "[Plan](Plan.md) and [Other](Other.md)",
-      moves: [{ oldPath: "Work/Plan.md", newPath: "Work/Plan/Plan.md" }]
+describe("moved note attachment link rewrites", () => {
+  it("rewrites only local attachment markdown links inside a moved note", () => {
+    const result = rewriteAttachmentLinksForMovedFile({
+      oldNotePath: "Work/Plan.md",
+      newNotePath: "Work/Plan/Plan.md",
+      content: "[Index](Index.md#Top) ![Cover](cover.png) [Manual](files/manual.pdf#page=2) [Spec](../Spec.md) [site](https://example.com)"
     });
 
-    expect(result).toEqual({
-      updatedContent: "[Plan](./Plan/Plan.md) and [Other](Other.md)",
-      replacements: 1
-    });
+    expect(result.updatedContent).toBe("[Index](Index.md#Top) ![Cover](../cover.png) [Manual](../files/manual.pdf#page=2) [Spec](../Spec.md) [site](https://example.com)");
+    expect(result.replacements).toBe(2);
   });
 
-  it("rewrites markdown links from nested notes using relative paths", () => {
-    const result = rewriteDocumentLinks({
-      notePath: "Work/Notes/Index.md",
-      content: "[Plan](../Plan.md)",
-      moves: [{ oldPath: "Work/Plan.md", newPath: "Work/Plan/Plan.md" }]
+  it("leaves wiki links and extensionless markdown links untouched", () => {
+    const result = rewriteAttachmentLinksForMovedFile({
+      oldNotePath: "Work/Plan.md",
+      newNotePath: "Work/Plan/Plan.md",
+      content: "[[Index]] [Route](local-route) ![[cover.png]]"
     });
 
-    expect(result.updatedContent).toBe("[Plan](../Plan/Plan.md)");
-  });
-
-  it("rewrites wiki links and preserves aliases", () => {
-    const result = rewriteDocumentLinks({
-      notePath: "Work/Index.md",
-      content: "[[Plan|Project plan]] and [[Other]]",
-      moves: [{ oldPath: "Work/Plan.md", newPath: "Work/Plan/Plan.md" }]
-    });
-
-    expect(result.updatedContent).toBe("[[Work/Plan/Plan|Project plan]] and [[Other]]");
-    expect(result.replacements).toBe(1);
-  });
-
-  it("matches basename wiki links", () => {
-    const result = rewriteDocumentLinks({
-      notePath: "Index.md",
-      content: "[[Plan]]",
-      moves: [{ oldPath: "Work/Plan.md", newPath: "Work/Plan/Plan.md" }]
-    });
-
-    expect(result.updatedContent).toBe("[[Work/Plan/Plan]]");
-  });
-
-  it("skips attachments urls anchors and embeds", () => {
-    const result = rewriteDocumentLinks({
-      notePath: "Work/Index.md",
-      content: "![Plan](Plan.md) [site](https://example.com/Plan.md) [[image.png]] [[#Heading]]",
-      moves: [{ oldPath: "Work/Plan.md", newPath: "Work/Plan/Plan.md" }]
-    });
-
-    expect(result).toEqual({
-      updatedContent: "![Plan](Plan.md) [site](https://example.com/Plan.md) [[image.png]] [[#Heading]]",
-      replacements: 0
-    });
+    expect(result.updatedContent).toBe("[[Index]] [Route](local-route) ![[cover.png]]");
+    expect(result.replacements).toBe(0);
   });
 });
-

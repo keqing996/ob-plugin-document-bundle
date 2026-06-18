@@ -12,6 +12,7 @@ type FakeFileEntry = { path: string; name: string; extension: string };
 type FakeFolderEntry = { path: string; name: string; children: unknown[] };
 type FakeEntry = FakeFileEntry | FakeFolderEntry;
 type StoredBinary = ArrayBuffer;
+type FakeChildSnapshot = { name: string; type: "file" | "folder" };
 
 class FakeVault {
   readonly files = new Map<string, StoredBinary>();
@@ -47,6 +48,21 @@ class FakeVault {
 
   async createBinary(path: string, data: ArrayBuffer): Promise<void> {
     this.files.set(path, data);
+  }
+
+  directChildren(path: string): FakeChildSnapshot[] {
+    const children: FakeChildSnapshot[] = [];
+    for (const folderPath of this.folders) {
+      if (folderPath !== path && dirname(folderPath) === path) {
+        children.push({ name: basename(folderPath), type: "folder" });
+      }
+    }
+    for (const filePath of this.files.keys()) {
+      if (dirname(filePath) === path) {
+        children.push({ name: basename(filePath), type: "file" });
+      }
+    }
+    return children;
   }
 
   private exists(path: string): boolean {
@@ -95,7 +111,7 @@ describe("Obsidian attachment handlers", () => {
     expect(editor.inserted).toBe("");
   });
 
-  it("does not intercept pasted files when pasted attachment handling is disabled", async () => {
+  it("does not intercept pasted files when bundle attachment handling is disabled", async () => {
     const vault = new FakeVault();
     vault.addFolder("Project");
     vault.addFolder("Project/assets");
@@ -104,7 +120,7 @@ describe("Obsidian attachment handlers", () => {
     const event = fakePasteEvent([new File(["image"], "shot.png", { type: "image/png" })]);
 
     await handlePaste(
-      fakePlugin(vault, { handlePastedAttachments: false }),
+      fakePlugin(vault, { handleBundleAttachments: false }),
       event as unknown as ClipboardEvent,
       editor as unknown as Editor,
       fakeView("Project/Project.md") as unknown as MarkdownView
@@ -155,7 +171,7 @@ describe("Obsidian attachment handlers", () => {
     expect(editor.inserted).toBe("");
   });
 
-  it("does not intercept dropped files when dropped attachment handling is disabled", async () => {
+  it("does not intercept dropped files when bundle attachment handling is disabled", async () => {
     const vault = new FakeVault();
     vault.addFolder("Project");
     vault.addFolder("Project/assets");
@@ -164,7 +180,7 @@ describe("Obsidian attachment handlers", () => {
     const event = fakeDropEvent([new File(["brief"], "brief.pdf", { type: "application/pdf" })]);
 
     await handleDrop(
-      fakePlugin(vault, { handleDroppedAttachments: false }),
+      fakePlugin(vault, { handleBundleAttachments: false }),
       event as unknown as DragEvent,
       editor as unknown as Editor,
       fakeView("Project/Project.md") as unknown as MarkdownView
@@ -175,51 +191,35 @@ describe("Obsidian attachment handlers", () => {
     expect(editor.inserted).toBe("");
   });
 
-  it("auto-converts normal notes before storing incoming attachments when configured", async () => {
+  it("treats matching-name markdown inside a non-strict folder as a normal note", async () => {
     const vault = new FakeVault();
-    vault.addFile("Inbox.md");
+    vault.addFolder("Project");
+    vault.addFolder("Project/assets");
+    vault.addFolder("Project/Extra");
+    vault.addFile("Project/Project.md");
     const editor = new FakeEditor();
-    const event = fakePasteEvent([new File(["image"], "diagram.png", { type: "image/png" })]);
-    const convertedBundle: BundleInfo = {
-      folderPath: "Inbox",
-      folderName: "Inbox",
-      mainFilePath: "Inbox/Inbox.md",
-      assetsFolderPath: "Inbox/assets"
-    };
-    let convertedPath = "";
-
-    const plugin = fakePlugin(vault, {
-      pasteIntoNormalNoteBehavior: "auto-convert",
-      convertFileToBundle: async (file) => {
-        convertedPath = file.path;
-        vault.addFolder("Inbox");
-        vault.addFolder("Inbox/assets");
-        vault.addFile("Inbox/Inbox.md");
-        return convertedBundle;
-      }
-    });
+    const event = fakePasteEvent([new File(["image"], "shot.png", { type: "image/png" })]);
 
     await handlePaste(
-      plugin,
+      fakePlugin(vault),
       event as unknown as ClipboardEvent,
       editor as unknown as Editor,
-      fakeView("Inbox.md") as unknown as MarkdownView
+      fakeView("Project/Project.md") as unknown as MarkdownView
     );
 
-    expect(convertedPath).toBe("Inbox.md");
-    expect(event.prevented).toBe(true);
-    expect(vault.files.has("Inbox/assets/diagram.png")).toBe(true);
-    expect(editor.inserted).toBe("![](./assets/diagram.png)");
+    expect(event.prevented).toBe(false);
+    expect(vault.files.has("Project/assets/shot.png")).toBe(false);
+    expect(editor.inserted).toBe("");
   });
 
-  it("does not intercept normal-note paste when configured to use Obsidian default behavior", async () => {
+  it("does not intercept normal-note paste", async () => {
     const vault = new FakeVault();
     vault.addFile("Inbox.md");
     const editor = new FakeEditor();
     const event = fakePasteEvent([new File(["image"], "diagram.png", { type: "image/png" })]);
 
     await handlePaste(
-      fakePlugin(vault, { pasteIntoNormalNoteBehavior: "default" }),
+      fakePlugin(vault),
       event as unknown as ClipboardEvent,
       editor as unknown as Editor,
       fakeView("Inbox.md") as unknown as MarkdownView
@@ -227,6 +227,24 @@ describe("Obsidian attachment handlers", () => {
 
     expect(event.prevented).toBe(false);
     expect(vault.files.has("Inbox/assets/diagram.png")).toBe(false);
+    expect(editor.inserted).toBe("");
+  });
+
+  it("does not intercept normal-note drop", async () => {
+    const vault = new FakeVault();
+    vault.addFile("Inbox.md");
+    const editor = new FakeEditor();
+    const event = fakeDropEvent([new File(["brief"], "brief.pdf", { type: "application/pdf" })]);
+
+    await handleDrop(
+      fakePlugin(vault),
+      event as unknown as DragEvent,
+      editor as unknown as Editor,
+      fakeView("Inbox.md") as unknown as MarkdownView
+    );
+
+    expect(event.prevented).toBe(false);
+    expect(vault.files.has("Inbox/assets/brief.pdf")).toBe(false);
     expect(editor.inserted).toBe("");
   });
 });
@@ -242,21 +260,15 @@ class FakeEditor {
 function fakePlugin(
   vault: FakeVault,
   overrides: {
-    handlePastedAttachments?: boolean;
-    handleDroppedAttachments?: boolean;
-    pasteIntoNormalNoteBehavior?: DocumentsBundleSettings["pasteIntoNormalNoteBehavior"];
+    handleBundleAttachments?: boolean;
     convertFileToBundle?: (file: FakeFileEntry) => Promise<BundleInfo>;
     confirm?: () => Promise<boolean>;
   } = {}
 ): DocumentsBundlePlugin {
   const settings: DocumentsBundleSettings = {
-    attachmentFolderName: "assets",
-    handlePastedAttachments: overrides.handlePastedAttachments ?? true,
-    handleDroppedAttachments: overrides.handleDroppedAttachments ?? true,
-    pasteIntoNormalNoteBehavior: overrides.pasteIntoNormalNoteBehavior ?? "ask",
+    handleBundleAttachments: overrides.handleBundleAttachments ?? true,
     enhanceNativeFileExplorer: true,
-    imageFilenamePattern: "image-YYYYMMDD-HHmmss",
-    useRelativeMarkdownLinks: true
+    bundleBadgeMode: "icon"
   };
 
   return {
@@ -264,6 +276,29 @@ function fakePlugin(
     settings,
     ensureFolder: async (path: string) => {
       await vault.createFolder(path);
+    },
+    getBundleInfoForFile: (file: FakeFileEntry) => {
+      const folderPath = dirname(file.path);
+      const folderName = basename(folderPath);
+      const mainFileName = `${folderName}.md`;
+      const children = vault.directChildren(folderPath);
+      const isBundle = file.extension === "md"
+        && folderPath.length > 0
+        && file.name === mainFileName
+        && children.length === 2
+        && children.some((child) => child.name === mainFileName && child.type === "file")
+        && children.some((child) => child.name === "assets" && child.type === "folder");
+
+      if (!isBundle) {
+        return null;
+      }
+
+      return {
+        folderPath,
+        folderName,
+        mainFilePath: file.path,
+        assetsFolderPath: `${folderPath}/assets`
+      };
     },
     convertFileToBundle: overrides.convertFileToBundle ?? (async () => {
       throw new Error("Unexpected conversion.");
@@ -308,6 +343,11 @@ function fakeDropEvent(files: File[]): { dataTransfer: { files: File[] }; defaul
 
 function basename(path: string): string {
   return path.split("/").pop() ?? path;
+}
+
+function dirname(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index === -1 ? "" : path.slice(0, index);
 }
 
 function extension(name: string): string {
