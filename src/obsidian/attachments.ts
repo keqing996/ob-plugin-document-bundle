@@ -64,7 +64,7 @@ async function handleIncomingFiles(
 
     if (
       plugin.settings.pasteIntoNormalNoteBehavior === "auto-convert" ||
-      window.confirm(plugin.t("confirm.convertNoteToBundle"))
+      await plugin.confirm(plugin.t("confirm.convertNoteToBundle"))
     ) {
       event.preventDefault();
       bundle = await plugin.convertFileToBundle(currentFile);

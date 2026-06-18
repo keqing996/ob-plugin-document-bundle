@@ -12,6 +12,8 @@ const minimumArtifactSizes: Record<(typeof requiredArtifacts)[number], number> =
 const manifest = await readJson("manifest.json");
 const pkg = await readJson("package.json");
 const packageLock = await readJson("package-lock.json");
+const versions = await readJson("versions.json");
+const license = await readFile(resolve(projectRoot, "LICENSE"), "utf8");
 const artifactStats: Record<(typeof requiredArtifacts)[number], number> = {
   "main.js": 0,
   "manifest.json": 0,
@@ -33,9 +35,16 @@ for (const artifact of requiredArtifacts) {
 
 assertEqual(manifest.id, pkg.name, "manifest id must match package name");
 assertEqual(manifest.version, pkg.version, "manifest version must match package version");
+assertEqual(versions[manifest.version], manifest.minAppVersion, "versions.json must map the current plugin version to manifest.minAppVersion");
 assertEqual(packageLock.name, pkg.name, "package-lock name must match package name");
 assertEqual(packageLock.version, pkg.version, "package-lock version must match package version");
+assertEqual(packageLock.packages?.[""]?.name, pkg.name, "package-lock root package name must match package name");
+assertEqual(packageLock.packages?.[""]?.version, pkg.version, "package-lock root package version must match package version");
 assertEqual(pkg.main, "main.js", "package main must point at main.js");
+
+if (!license.includes("MIT License") || !license.includes("Copyright (c) 2026 kq996")) {
+  throw new Error("LICENSE must contain the expected MIT license and copyright notice.");
+}
 
 for (const field of ["id", "name", "version", "minAppVersion", "description", "author"]) {
   if (typeof manifest[field] !== "string" || manifest[field].trim().length === 0) {
@@ -48,6 +57,20 @@ if (manifest.id !== "documents-bundle") {
 }
 if (manifest.name !== "Documents Bundle") {
   throw new Error(`Unexpected plugin display name: ${manifest.name}`);
+}
+if (manifest.version !== "1.0.0") {
+  throw new Error(`Unexpected release version: ${manifest.version}`);
+}
+if (manifest.minAppVersion !== "1.8.7") {
+  throw new Error(`Unexpected minimum app version: ${manifest.minAppVersion}`);
+}
+if (manifest.authorUrl !== "https://github.com/keqing996") {
+  throw new Error(`Unexpected author URL: ${manifest.authorUrl}`);
+}
+try {
+  new URL(manifest.authorUrl);
+} catch {
+  throw new Error(`manifest.authorUrl must be a valid URL: ${manifest.authorUrl}`);
 }
 if (manifest.isDesktopOnly !== false) {
   throw new Error("manifest.isDesktopOnly must remain false while mobile fallback paths are supported.");
@@ -82,6 +105,7 @@ console.log(JSON.stringify({
     name: manifest.name,
     version: manifest.version,
     minAppVersion: manifest.minAppVersion,
+    versionsMapping: versions[manifest.version],
     isDesktopOnly: manifest.isDesktopOnly
   },
   artifacts: artifactStats

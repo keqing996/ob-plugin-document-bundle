@@ -24,13 +24,14 @@ export class NativeFileExplorerPatch {
   constructor(private readonly options: NativeFileExplorerPatchOptions) {}
 
   enable(): void {
-    if (!Platform.isDesktopApp || !document.body) {
+    const doc = getActiveDocument();
+    if (!Platform.isDesktopApp || !doc.body) {
       return;
     }
 
     this.refresh();
     this.observer = new MutationObserver(() => this.refresh());
-    this.observer.observe(document.body, {
+    this.observer.observe(doc.body, {
       childList: true,
       subtree: true
     });
@@ -45,7 +46,8 @@ export class NativeFileExplorerPatch {
     }
     this.listeners.clear();
 
-    for (const element of Array.from(document.querySelectorAll(`.${NATIVE_BUNDLE_CLASS}, .${NATIVE_BUNDLE_TITLE_CLASS}, .${NATIVE_BUNDLE_TITLE_ACTIVE_CLASS}, .${NATIVE_BUNDLE_CHILDREN_CLASS}`))) {
+    const doc = getActiveDocument();
+    for (const element of Array.from(doc.querySelectorAll(`.${NATIVE_BUNDLE_CLASS}, .${NATIVE_BUNDLE_TITLE_CLASS}, .${NATIVE_BUNDLE_TITLE_ACTIVE_CLASS}, .${NATIVE_BUNDLE_CHILDREN_CLASS}`))) {
       element.classList.remove(NATIVE_BUNDLE_CLASS, NATIVE_BUNDLE_TITLE_CLASS, NATIVE_BUNDLE_TITLE_ACTIVE_CLASS, NATIVE_BUNDLE_CHILDREN_CLASS);
       delete (element as HTMLElement).dataset.documentsBundlePath;
       delete (element as HTMLElement).dataset.documentsBundleLabel;
@@ -53,12 +55,13 @@ export class NativeFileExplorerPatch {
   }
 
   refresh(): void {
-    if (!Platform.isDesktopApp || !document.body) {
+    const doc = getActiveDocument();
+    if (!Platform.isDesktopApp || !doc.body) {
       return;
     }
 
     const bundlePaths = this.collectBundleFolderPaths();
-    const folderNodes = document.querySelectorAll(".workspace-leaf-content[data-type='file-explorer'] .nav-folder, .nav-folder");
+    const folderNodes = doc.querySelectorAll(".workspace-leaf-content[data-type='file-explorer'] .nav-folder, .nav-folder");
     const seenTitles = new Set<Element>();
 
     for (const node of Array.from(folderNodes)) {
@@ -151,6 +154,10 @@ export class NativeFileExplorerPatch {
     walk(this.options.app.vault.getRoot());
     return bundlePaths;
   }
+}
+
+function getActiveDocument(): Document {
+  return activeDocument;
 }
 
 export function getFolderPathFromNativeNode(node: Element, title: Element, bundlePaths: Set<string>): string | null {

@@ -246,6 +246,7 @@ function fakePlugin(
     handleDroppedAttachments?: boolean;
     pasteIntoNormalNoteBehavior?: DocumentsBundleSettings["pasteIntoNormalNoteBehavior"];
     convertFileToBundle?: (file: FakeFileEntry) => Promise<BundleInfo>;
+    confirm?: () => Promise<boolean>;
   } = {}
 ): DocumentsBundlePlugin {
   const settings: DocumentsBundleSettings = {
@@ -266,7 +267,11 @@ function fakePlugin(
     },
     convertFileToBundle: overrides.convertFileToBundle ?? (async () => {
       throw new Error("Unexpected conversion.");
-    })
+    }),
+    confirm: overrides.confirm ?? (async () => {
+      throw new Error("Unexpected confirmation.");
+    }),
+    t: (key: string) => key
   } as unknown as DocumentsBundlePlugin;
 }
 

@@ -57,7 +57,11 @@ export class ObsidianBundleFileSystem implements BundleFileSystem {
     }
 
     await copyFolderRecursive(this.vault, source, targetPath, {
-      afterBundleMainCopied: this.options.afterBundleMainCopied,
+      afterBundleMainCopied: this.options.afterBundleMainCopied
+        ? async (path) => {
+          await this.options.afterBundleMainCopied?.(path);
+        }
+        : undefined,
       renameBundleMainToTarget: true
     });
   }
@@ -68,6 +72,8 @@ export class ObsidianBundleFileSystem implements BundleFileSystem {
       throw new Error(`Cannot delete missing path: ${path}`);
     }
 
+    // This adapter intentionally depends only on Vault so core bundle operations stay easy to test.
+    // eslint-disable-next-line obsidianmd/prefer-file-manager-trash-file
     await this.vault.trash(file, true);
   }
 
@@ -168,5 +174,5 @@ async function adapterFolderTreeHasFiles(vault: Vault, path: string): Promise<bo
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }

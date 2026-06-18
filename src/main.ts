@@ -10,12 +10,20 @@ import { openAssetsFolderWithFallback } from "./obsidian/assets-folder";
 import { BundleSuggestModal } from "./obsidian/bundle-suggest-modal";
 import { addBundleFolderMenuItems, addNormalFolderMenuItems, addNormalMarkdownMenuItems } from "./obsidian/file-menu";
 import { ObsidianBundleFileSystem } from "./obsidian/fs";
-import { PromptModal } from "./obsidian/prompt-modal";
+import { ConfirmModal, PromptModal } from "./obsidian/prompt-modal";
 import { DocumentsBundleSettingTab } from "./obsidian/settings-tab";
 import { DEFAULT_SETTINGS } from "./settings";
 import type { BundleInfo, DocumentsBundleSettings } from "./types";
 import { NativeFileExplorerPatch } from "./obsidian/native-file-explorer-patch";
 import { getCurrentLocale, translate, type TranslationKey, type TranslationVars } from "./i18n";
+
+type ElectronShellModule = {
+  shell: {
+    openPath(path: string): Promise<string>;
+  };
+};
+
+declare const require: (moduleName: "electron") => ElectronShellModule;
 
 export default class DocumentsBundlePlugin extends Plugin {
   settings: DocumentsBundleSettings = DEFAULT_SETTINGS;
@@ -25,6 +33,15 @@ export default class DocumentsBundlePlugin extends Plugin {
   t(key: TranslationKey, vars?: TranslationVars): string {
     const language = typeof getLanguage === "function" ? getLanguage() : "en";
     return translate(getCurrentLocale(language), key, vars);
+  }
+
+  async confirm(message: string): Promise<boolean> {
+    return new ConfirmModal(
+      this.app,
+      message,
+      this.t("button.confirm"),
+      this.t("button.cancel")
+    ).openAndGetConfirmation();
   }
 
   private errorMessage(error: unknown): string {
@@ -72,7 +89,8 @@ export default class DocumentsBundlePlugin extends Plugin {
   }
 
   async onload(): Promise<void> {
-    this.settings = { ...DEFAULT_SETTINGS, ...await this.loadData() };
+    const savedSettings = await this.loadData() as Partial<DocumentsBundleSettings> | null;
+    this.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
     this.fs = new ObsidianBundleFileSystem(this.app.vault, {
       afterBundleMainCopied: async (path) => {
         const file = this.app.vault.getAbstractFileByPath(path);
@@ -222,12 +240,16 @@ export default class DocumentsBundlePlugin extends Plugin {
       this.refreshNativeFileExplorerPatch();
     }));
 
+    // The attachment handler decides whether this paste should be claimed.
+    // eslint-disable-next-line obsidianmd/editor-drop-paste
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, view) => {
       if (view instanceof MarkdownView) {
         void handlePaste(this, event, editor, view);
       }
     }));
 
+    // The attachment handler decides whether this drop should be claimed.
+    // eslint-disable-next-line obsidianmd/editor-drop-paste
     this.registerEvent(this.app.workspace.on("editor-drop", (event, editor, view) => {
       if (view instanceof MarkdownView) {
         void handleDrop(this, event, editor, view);
@@ -335,7 +357,8 @@ export default class DocumentsBundlePlugin extends Plugin {
         notify: (message) => new Notice(message),
         formatAssetsFolderMessage: (path) => this.t("notice.assetsFolder", { path }),
         openPath: async (path) => {
-          const electron = require("electron") as { shell: { openPath(path: string): Promise<string> } };
+          // Electron access is guarded by Platform.isDesktopApp in openAssetsFolderWithFallback.
+          const electron = require("electron");
           return electron.shell.openPath(path);
         }
       }, bundle);
@@ -368,7 +391,6 @@ export default class DocumentsBundlePlugin extends Plugin {
   async previewAttachmentMigration(file: TFile): Promise<void> {
     try {
       const plan = await this.planAttachmentMigrationForFile(file);
-      console.info("Documents Bundle attachment migration dry-run", plan);
       new Notice(this.t("notice.attachmentMigrationDryRun", { count: plan.items.length }));
     } catch (error) {
       new Notice(this.errorMessage(error));
@@ -383,7 +405,7 @@ export default class DocumentsBundlePlugin extends Plugin {
         return;
       }
 
-      const confirmed = window.confirm(this.t("confirm.migrateCurrentBundleAttachments", { count: plan.items.length }));
+      const confirmed = await this.confirm(this.t("confirm.migrateCurrentBundleAttachments", { count: plan.items.length }));
       if (!confirmed) {
         return;
       }
@@ -412,18 +434,7 @@ export default class DocumentsBundlePlugin extends Plugin {
   async previewVaultAttachmentMigration(): Promise<void> {
     try {
       const summary = await this.buildVaultAttachmentMigrationReport();
-      const validation = validateVaultAttachmentMigration(summary);
       const reportPath = await this.writeVaultMigrationReport(summary);
-      console.info("Documents Bundle vault attachment migration dry-run", summary);
-      if (validation.errors.length > 0) {
-        console.warn("Documents Bundle vault attachment migration issues", validation);
-      }
-      console.table(summary.reports.flatMap((report) => report.plan.items.map((item) => ({
-        bundle: report.bundle.folderPath,
-        source: item.sourcePath,
-        target: item.targetPath,
-        rewritten: item.rewrittenTarget
-      }))));
       new Notice(this.t("notice.vaultMigrationDryRun", { count: summary.attachmentsToMove, path: reportPath }));
     } catch (error) {
       new Notice(this.errorMessage(error));
@@ -440,13 +451,12 @@ export default class DocumentsBundlePlugin extends Plugin {
 
       const validation = validateVaultAttachmentMigration(summary);
       if (validation.errors.length > 0) {
-        console.warn("Documents Bundle vault attachment migration blocked", validation);
         new Notice(this.t("notice.vaultMigrationBlocked", { count: validation.errors.length }));
         return;
       }
 
       const sharedSourcePaths = new Set(validation.sharedSourcePaths);
-      const confirmed = window.confirm(this.t("confirm.migrateVaultAttachments", {
+      const confirmed = await this.confirm(this.t("confirm.migrateVaultAttachments", {
         attachments: summary.attachmentsToMove,
         bundles: summary.bundlesWithMigrations
       }));
@@ -537,7 +547,7 @@ export default class DocumentsBundlePlugin extends Plugin {
   async deleteBundleWithConfirm(folderPath: string): Promise<void> {
     try {
       const bundle = getBundleInfoFromFolderPath(folderPath, this.settings.attachmentFolderName);
-      const confirmed = window.confirm(this.t("confirm.deleteBundle", { name: bundle.folderName }));
+      const confirmed = await this.confirm(this.t("confirm.deleteBundle", { name: bundle.folderName }));
       if (!confirmed) {
         return;
       }

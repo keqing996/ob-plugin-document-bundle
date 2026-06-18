@@ -4,6 +4,8 @@ export type TranslationKey = keyof typeof EN_TRANSLATIONS;
 
 const EN_TRANSLATIONS = {
   "badge.bundle": "Bundle",
+  "button.cancel": "Cancel",
+  "button.confirm": "Confirm",
 
   "command.newBundleDocument": "New bundle document",
   "command.openBundleDocument": "Open bundle document",
@@ -109,6 +111,8 @@ const EN_TRANSLATIONS = {
 
 const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
   "badge.bundle": "包",
+  "button.cancel": "取消",
+  "button.confirm": "确认",
 
   "command.newBundleDocument": "新建文档包",
   "command.openBundleDocument": "打开文档包",
@@ -220,7 +224,7 @@ export function getCurrentLocale(language = "en"): Locale {
 
 export function translate(locale: Locale, key: TranslationKey, vars: TranslationVars = {}): string {
   const template = locale === "zh" ? ZH_TRANSLATIONS[key] : EN_TRANSLATIONS[key];
-  return template.replace(/\{(\w+)\}/g, (match, name) => {
+  return template.replace(/\{(\w+)\}/g, (match: string, name: string) => {
     const value = vars[name];
     return value === undefined ? match : String(value);
   });

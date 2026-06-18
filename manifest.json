@@ -1,10 +1,10 @@
 {
   "id": "documents-bundle",
   "name": "Documents Bundle",
-  "version": "0.1.0",
-  "minAppVersion": "1.5.0",
+  "version": "1.0.0",
+  "minAppVersion": "1.8.7",
   "description": "Treat each Markdown document as a self-contained bundle with local assets.",
   "author": "kq996",
-  "authorUrl": "",
+  "authorUrl": "https://github.com/keqing996",
   "isDesktopOnly": false
 }

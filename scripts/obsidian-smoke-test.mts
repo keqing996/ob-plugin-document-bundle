@@ -366,9 +366,9 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     const askCancelEvent = makeIncomingEvent('clipboardData', [
       new File(['ask cancel image'], 'ask-cancel.png', { type: 'image/png' })
     ]);
-    const previousConfirmForAsk = window.confirm;
+    const previousConfirmForAsk = plugin.confirm;
     let askPromptCount = 0;
-    window.confirm = () => {
+    plugin.confirm = async () => {
       askPromptCount += 1;
       return false;
     };
@@ -376,7 +376,7 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
       window.app.workspace.trigger('editor-paste', askCancelEvent, askNoteView.editor, askNoteView);
       await sleep(500);
     } finally {
-      window.confirm = previousConfirmForAsk;
+      plugin.confirm = previousConfirmForAsk;
     }
     assert(askPromptCount === 1, 'Normal-note ask cancel did not show a confirmation prompt.');
     assert(!askCancelEvent.prevented, 'Normal-note ask cancel should not prevent Obsidian default paste.');
@@ -386,7 +386,7 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     const askConfirmEvent = makeIncomingEvent('clipboardData', [
       new File(['ask confirm image'], 'ask-confirm.png', { type: 'image/png' })
     ]);
-    window.confirm = () => {
+    plugin.confirm = async () => {
       askPromptCount += 1;
       return true;
     };
@@ -394,7 +394,7 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
       window.app.workspace.trigger('editor-paste', askConfirmEvent, askNoteView.editor, askNoteView);
       await sleep(1000);
     } finally {
-      window.confirm = previousConfirmForAsk;
+      plugin.confirm = previousConfirmForAsk;
     }
     assert(askPromptCount === 2, 'Normal-note ask confirm did not show a second confirmation prompt.');
     assert(askConfirmEvent.prevented, 'Normal-note ask confirm event was not prevented by the plugin.');
@@ -412,12 +412,12 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     assert(!pathExists('Existing Bundle copy'), 'Moved bundle still exists at old root path.');
     assert(pathExists('Regular Folder/Existing Bundle copy/Existing Bundle copy.md'), 'Moved bundle main file missing.');
 
-    const previousConfirm = window.confirm;
-    window.confirm = () => true;
+    const previousConfirm = plugin.confirm;
+    plugin.confirm = async () => true;
     try {
       await plugin.deleteBundleWithConfirm('Regular Folder/Existing Bundle copy');
     } finally {
-      window.confirm = previousConfirm;
+      plugin.confirm = previousConfirm;
     }
     await sleep(250);
     assert(!pathExists('Regular Folder/Existing Bundle copy'), 'Deleted bundle still exists.');
@@ -445,11 +445,11 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     assert(indexContent.includes('[Plan](./Plan/Plan.md)'), 'Markdown document link was not rewritten after conversion.');
     assert(indexContent.includes('[[Conversion Links/Plan/Plan|Plan wiki link]]'), 'Wiki document link was not rewritten after conversion.');
 
-    window.confirm = () => true;
+    plugin.confirm = async () => true;
     try {
       await plugin.migrateCurrentBundleAttachments(file('Legacy Attachments/Project/Project.md'));
     } finally {
-      window.confirm = previousConfirm;
+      plugin.confirm = previousConfirm;
     }
     await sleep(500);
     assert(pathExists('Legacy Attachments/Project/assets/diagram.png'), 'Current migration did not move diagram.png.');
@@ -465,11 +465,11 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
 
     const beforeVaultMigration = await plugin.buildVaultAttachmentMigrationReport();
     assert(beforeVaultMigration.attachmentsToMove === 2, 'Expected 2 shared attachments left before vault migration, got ' + beforeVaultMigration.attachmentsToMove + '.');
-    window.confirm = () => true;
+    plugin.confirm = async () => true;
     try {
       await plugin.migrateVaultAttachments();
     } finally {
-      window.confirm = previousConfirm;
+      plugin.confirm = previousConfirm;
     }
     await sleep(750);
     assert(pathExists('Shared Attachment/External/shared.png'), 'Shared source attachment should be preserved.');

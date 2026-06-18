@@ -10,14 +10,16 @@ export class DocumentsBundleSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: this.plugin.t("settings.title") });
+    new Setting(containerEl)
+      .setName(this.plugin.t("settings.title"))
+      .setHeading();
 
     new Setting(containerEl)
       .setName(this.plugin.t("settings.defaultAttachmentFolderName.name"))
       .setDesc(this.plugin.t("settings.defaultAttachmentFolderName.desc"))
       .addText((text) => {
         text
-          .setPlaceholder("assets")
+          .setPlaceholder("Assets")
           .setValue(this.plugin.settings.attachmentFolderName)
           .onChange(async (value) => {
             this.plugin.settings.attachmentFolderName = value.trim() || "assets";
