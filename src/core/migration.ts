@@ -1,12 +1,24 @@
 import type { BundleInfo } from "../types";
 import type { Translate, TranslationKey } from "../i18n";
-import { basename, dirname, extname, joinVaultPath, normalizeVaultPath } from "./path";
+import { basename, dirname, encodeMarkdownPath, extname, joinVaultPath, normalizeVaultPath } from "./path";
+
+export type LinkKind = "markdown" | "wiki";
+
+export interface AttachmentLinkResolveInput {
+  kind: LinkKind;
+  target: string;
+  notePath: string;
+  noteDir: string;
+}
+
+export type AttachmentLinkResolver = (input: AttachmentLinkResolveInput) => string | null | undefined;
 
 export interface AttachmentMigrationInput {
   bundle: BundleInfo;
   notePath: string;
   content: string;
   existingTargetPaths?: Set<string>;
+  resolveLinkTarget?: AttachmentLinkResolver;
 }
 
 export interface AttachmentMigrationItem {
@@ -40,6 +52,22 @@ export interface VaultAttachmentMigrationValidation {
   duplicateTargetPaths: string[];
 }
 
+export interface AttachmentMigrationExecutionReport {
+  notePath: string;
+  plan: AttachmentMigrationPlan;
+}
+
+export interface AttachmentMigrationExecutionInput {
+  reports: AttachmentMigrationExecutionReport[];
+  sharedSourcePaths?: Set<string>;
+  exists(path: string): Promise<boolean>;
+  copyAttachment(sourcePath: string, targetPath: string): Promise<void>;
+  writeNote(notePath: string, content: string): Promise<void>;
+  deleteAttachment(path: string): Promise<void>;
+  missingSourceMessage?(path: string): string;
+  targetExistsMessage?(path: string): string;
+}
+
 interface RenderVaultAttachmentMigrationReportOptions {
   validation?: VaultAttachmentMigrationValidation;
   t?: Translate;
@@ -65,8 +93,6 @@ const DEFAULT_REPORT_TRANSLATIONS: Partial<Record<TranslationKey, string>> = {
 };
 
 const englishReportText: Translate = (key) => DEFAULT_REPORT_TRANSLATIONS[key] ?? key;
-
-type LinkKind = "markdown" | "wiki";
 
 interface ParsedLink {
   kind: LinkKind;
@@ -117,7 +143,15 @@ export function planAttachmentMigration(input: AttachmentMigrationInput): Attach
   const replacements: Array<{ start: number; end: number; value: string }> = [];
 
   for (const link of links) {
-    const sourcePath = resolveVaultLinkTarget(noteDir, link);
+    const resolvedPath = input.resolveLinkTarget?.({
+      kind: link.kind,
+      target: link.target,
+      notePath: input.notePath,
+      noteDir
+    });
+    const sourcePath = normalizeVaultPath(resolvedPath && resolvedPath.length > 0
+      ? resolvedPath
+      : resolveVaultLinkTarget(noteDir, link));
     if (isInsideAssetsFolder(sourcePath, input.bundle.assetsFolderPath)) {
       continue;
     }
@@ -148,6 +182,48 @@ export function planAttachmentMigration(input: AttachmentMigrationInput): Attach
     items,
     updatedContent: applyReplacements(input.content, replacements)
   };
+}
+
+// Copy targets first and delete sources last so a failed note write never leaves rewritten links
+// pointing at files that have already been moved away from their original locations.
+export async function executeAttachmentMigration(input: AttachmentMigrationExecutionInput): Promise<void> {
+  const sharedSourcePaths = input.sharedSourcePaths ?? new Set<string>();
+
+  for (const report of input.reports) {
+    for (const item of report.plan.items) {
+      if (!await input.exists(item.sourcePath)) {
+        throw new Error(input.missingSourceMessage?.(item.sourcePath) ?? `Cannot migrate missing attachment: ${item.sourcePath}`);
+      }
+      if (await input.exists(item.targetPath)) {
+        throw new Error(input.targetExistsMessage?.(item.targetPath) ?? `Cannot migrate attachment: target already exists: ${item.targetPath}`);
+      }
+    }
+  }
+
+  for (const report of input.reports) {
+    for (const item of report.plan.items) {
+      await input.copyAttachment(item.sourcePath, item.targetPath);
+    }
+  }
+
+  for (const report of input.reports) {
+    if (report.plan.items.length > 0) {
+      await input.writeNote(report.notePath, report.plan.updatedContent);
+    }
+  }
+
+  const sourcePathsToDelete = new Set<string>();
+  for (const report of input.reports) {
+    for (const item of report.plan.items) {
+      if (!sharedSourcePaths.has(item.sourcePath)) {
+        sourcePathsToDelete.add(item.sourcePath);
+      }
+    }
+  }
+
+  for (const sourcePath of sourcePathsToDelete) {
+    await input.deleteAttachment(sourcePath);
+  }
 }
 
 export function summarizeVaultAttachmentMigration(reports: BundleAttachmentMigrationReport[]): VaultAttachmentMigrationReport {
@@ -358,7 +434,7 @@ function getAvailableMigrationTarget(assetsFolderPath: string, filename: string,
 
 function toBundleAssetTarget(targetPath: string, assetsFolderPath: string): string {
   const filename = targetPath.slice(normalizeVaultPath(assetsFolderPath).length + 1);
-  return `./assets/${filename}`;
+  return `./assets/${encodeMarkdownPath(filename)}`;
 }
 
 function renderReplacement(link: ParsedLink, rewrittenTarget: string): string {

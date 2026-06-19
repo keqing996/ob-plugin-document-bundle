@@ -1,7 +1,7 @@
 import { getLanguage, MarkdownView, Notice, Platform, Plugin, TAbstractFile, TFile, TFolder } from "obsidian";
 import { getBundleInfoFromFolderPath, getBundleInfoFromMainFilePath, isBundleFolderSnapshot, type BundleFolderChildSnapshot } from "./core/bundle";
 import { rewriteAttachmentLinksForMovedFile } from "./core/document-links";
-import { planAttachmentMigration, renderVaultAttachmentMigrationReport, summarizeVaultAttachmentMigration, validateVaultAttachmentMigration, type AttachmentMigrationPlan, type BundleAttachmentMigrationReport, type VaultAttachmentMigrationReport } from "./core/migration";
+import { executeAttachmentMigration, planAttachmentMigration, renderVaultAttachmentMigrationReport, summarizeVaultAttachmentMigration, validateVaultAttachmentMigration, type AttachmentLinkResolveInput, type AttachmentMigrationExecutionReport, type AttachmentMigrationPlan, type BundleAttachmentMigrationReport, type VaultAttachmentMigrationReport } from "./core/migration";
 import { getAvailableFilename } from "./core/naming";
 import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle } from "./core/operations";
 import { basename, dirname, formatTimestamp, joinVaultPath } from "./core/path";
@@ -53,6 +53,9 @@ export default class DocumentsBundlePlugin extends Plugin {
     const message = error.message;
     if (message === "Document name cannot be empty.") {
       return this.t("error.documentNameEmpty");
+    }
+    if (message === "Document name contains unsupported characters.") {
+      return this.t("error.documentNameInvalid");
     }
     if (message === "Only Markdown files can be converted to bundles.") {
       return this.t("error.onlyMarkdownFilesCanConvert");
@@ -115,7 +118,9 @@ export default class DocumentsBundlePlugin extends Plugin {
     // eslint-disable-next-line obsidianmd/editor-drop-paste
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, view) => {
       if (view instanceof MarkdownView) {
-        void handlePaste(this, event, editor, view);
+        void handlePaste(this, event, editor, view).catch(() => {
+          new Notice(this.t("error.cannotHandleIncomingAttachment"));
+        });
       }
     }));
 
@@ -123,7 +128,9 @@ export default class DocumentsBundlePlugin extends Plugin {
     // eslint-disable-next-line obsidianmd/editor-drop-paste
     this.registerEvent(this.app.workspace.on("editor-drop", (event, editor, view) => {
       if (view instanceof MarkdownView) {
-        void handleDrop(this, event, editor, view);
+        void handleDrop(this, event, editor, view).catch(() => {
+          new Notice(this.t("error.cannotHandleIncomingAttachment"));
+        });
       }
     }));
   }
@@ -270,20 +277,7 @@ export default class DocumentsBundlePlugin extends Plugin {
         return;
       }
 
-      for (const item of plan.items) {
-        if (!await this.fs.exists(item.sourcePath)) {
-          throw new Error(this.t("error.cannotMigrateMissingAttachment", { path: item.sourcePath }));
-        }
-        if (await this.fs.exists(item.targetPath)) {
-          throw new Error(this.t("error.cannotMigrateAttachmentTargetExists", { path: item.targetPath }));
-        }
-      }
-
-      for (const item of plan.items) {
-        await this.fs.rename(item.sourcePath, item.targetPath);
-      }
-
-      await this.app.vault.modify(file, plan.updatedContent);
+      await this.executeAttachmentMigrationReports([{ notePath: file.path, plan }]);
       this.refreshNativeFileExplorerPatch();
       new Notice(this.t("notice.migratedCurrentBundleAttachments", { count: plan.items.length }));
     } catch (error) {
@@ -336,37 +330,7 @@ export default class DocumentsBundlePlugin extends Plugin {
         return;
       }
 
-      for (const report of summary.reports) {
-        for (const item of report.plan.items) {
-          if (!await this.fs.exists(item.sourcePath)) {
-            throw new Error(this.t("error.cannotMigrateMissingAttachment", { path: item.sourcePath }));
-          }
-          if (await this.fs.exists(item.targetPath)) {
-            throw new Error(this.t("error.cannotMigrateAttachmentTargetExists", { path: item.targetPath }));
-          }
-        }
-      }
-
-      for (const report of summary.reports) {
-        for (const item of report.plan.items) {
-          if (sharedSourcePaths.has(item.sourcePath)) {
-            await this.copyAttachmentFile(item.sourcePath, item.targetPath);
-          } else {
-            await this.fs.rename(item.sourcePath, item.targetPath);
-          }
-        }
-      }
-
-      for (const report of summary.reports) {
-        if (report.plan.items.length === 0) {
-          continue;
-        }
-        const mainFile = this.app.vault.getAbstractFileByPath(report.notePath);
-        if (!(mainFile instanceof TFile)) {
-          throw new Error(this.t("error.cannotUpdateMissingBundleMainFile", { path: report.notePath }));
-        }
-        await this.app.vault.modify(mainFile, report.plan.updatedContent);
-      }
+      await this.executeAttachmentMigrationReports(summary.reports, sharedSourcePaths);
 
       this.refreshNativeFileExplorerPatch();
       new Notice(this.t("notice.migratedVaultAttachments", {
@@ -385,6 +349,31 @@ export default class DocumentsBundlePlugin extends Plugin {
     }
 
     await this.app.vault.createBinary(targetPath, await this.app.vault.readBinary(source));
+  }
+
+  private async executeAttachmentMigrationReports(
+    reports: AttachmentMigrationExecutionReport[],
+    sharedSourcePaths = new Set<string>()
+  ): Promise<void> {
+    await executeAttachmentMigration({
+      reports,
+      sharedSourcePaths,
+      exists: (path) => this.fs.exists(path),
+      copyAttachment: (sourcePath, targetPath) => this.copyAttachmentFile(sourcePath, targetPath),
+      writeNote: (notePath, content) => this.writeBundleMainFile(notePath, content),
+      deleteAttachment: (path) => this.fs.delete(path),
+      missingSourceMessage: (path) => this.t("error.cannotMigrateMissingAttachment", { path }),
+      targetExistsMessage: (path) => this.t("error.cannotMigrateAttachmentTargetExists", { path })
+    });
+  }
+
+  private async writeBundleMainFile(notePath: string, content: string): Promise<void> {
+    const mainFile = this.app.vault.getAbstractFileByPath(notePath);
+    if (!(mainFile instanceof TFile)) {
+      throw new Error(this.t("error.cannotUpdateMissingBundleMainFile", { path: notePath }));
+    }
+
+    await this.app.vault.modify(mainFile, content);
   }
 
   async moveBundleToParent(folderPath: string, targetParentPath: string): Promise<void> {
@@ -535,7 +524,8 @@ export default class DocumentsBundlePlugin extends Plugin {
       bundle,
       notePath: file.path,
       content,
-      existingTargetPaths: this.collectExistingAssetPaths(bundle.assetsFolderPath)
+      existingTargetPaths: this.collectExistingAssetPaths(bundle.assetsFolderPath),
+      resolveLinkTarget: (link) => this.resolveObsidianAttachmentTarget(link)
     });
   }
 
@@ -594,7 +584,8 @@ export default class DocumentsBundlePlugin extends Plugin {
         bundle,
         notePath: mainFile.path,
         content,
-        existingTargetPaths: this.collectExistingAssetPaths(bundle.assetsFolderPath)
+        existingTargetPaths: this.collectExistingAssetPaths(bundle.assetsFolderPath),
+        resolveLinkTarget: (link) => this.resolveObsidianAttachmentTarget(link)
       });
 
       reports.push({
@@ -690,6 +681,21 @@ export default class DocumentsBundlePlugin extends Plugin {
   refreshNativeFileExplorerPatch(): void {
     this.nativeFileExplorerPatch?.refresh();
   }
+
+  private resolveObsidianAttachmentTarget(input: AttachmentLinkResolveInput): string | null {
+    if (input.kind !== "wiki") {
+      return null;
+    }
+
+    // Obsidian wiki links can resolve through aliases and shortest paths, so use its index
+    // when available instead of guessing from the vault root.
+    const linkpath = decodeObsidianLinkTarget(stripObsidianLinkReference(input.target));
+    if (linkpath.length === 0) {
+      return null;
+    }
+
+    return this.app.metadataCache.getFirstLinkpathDest(linkpath, input.notePath)?.path ?? null;
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -718,4 +724,16 @@ function hasStrictPendingRenamedBundleChildren(folder: TFolder, oldFolderName: s
   return folder.children.length === 2
     && folder.children.some((entry) => entry instanceof TFile && entry.name === mainFileName)
     && folder.children.some((entry) => entry instanceof TFolder && entry.name === attachmentFolderName);
+}
+
+function stripObsidianLinkReference(target: string): string {
+  return target.split("#")[0].split("^")[0];
+}
+
+function decodeObsidianLinkTarget(target: string): string {
+  try {
+    return decodeURI(target);
+  } catch {
+    return target;
+  }
 }

@@ -1,4 +1,4 @@
-import { planAttachmentMigration, renderVaultAttachmentMigrationReport, summarizeVaultAttachmentMigration, validateVaultAttachmentMigration } from "../src/core/migration";
+import { executeAttachmentMigration, planAttachmentMigration, renderVaultAttachmentMigrationReport, summarizeVaultAttachmentMigration, validateVaultAttachmentMigration } from "../src/core/migration";
 import type { BundleInfo } from "../src/types";
 
 const bundle: BundleInfo = {
@@ -45,6 +45,33 @@ describe("attachment migration", () => {
       ["docs/spec.pdf", "Notes/Project/assets/spec.pdf"]
     ]);
     expect(plan.updatedContent).toBe("![Chart](./assets/chart.png) and [spec.pdf](./assets/spec.pdf)");
+  });
+
+  it("uses an injected resolver for Obsidian wiki attachment links", () => {
+    const plan = planAttachmentMigration({
+      bundle,
+      notePath: "Notes/Project/Project.md",
+      content: "![[chart.png]]",
+      resolveLinkTarget: (link) => link.kind === "wiki" && link.target === "chart.png"
+        ? "Notes/Project/chart.png"
+        : null
+    });
+
+    expect(plan.items[0].sourcePath).toBe("Notes/Project/chart.png");
+    expect(plan.items[0].targetPath).toBe("Notes/Project/assets/chart.png");
+    expect(plan.updatedContent).toBe("![chart.png](./assets/chart.png)");
+  });
+
+  it("round trips encoded markdown targets with special filename characters", () => {
+    const plan = planAttachmentMigration({
+      bundle,
+      notePath: "Notes/Project/Project.md",
+      content: "![odd](../foo%20%28draft%25%29.png)"
+    });
+
+    expect(plan.items[0].sourcePath).toBe("Notes/foo (draft%).png");
+    expect(plan.items[0].targetPath).toBe("Notes/Project/assets/foo (draft%).png");
+    expect(plan.updatedContent).toBe("![odd](./assets/foo%20%28draft%25%29.png)");
   });
 
   it("skips remote urls anchors and already bundled assets", () => {
@@ -180,5 +207,75 @@ describe("attachment migration", () => {
     expect(renderVaultAttachmentMigrationReport(summary)).toContain("# Documents Bundle Attachment Migration Report");
     expect(renderVaultAttachmentMigrationReport(summary)).toContain("- Bundles scanned: 1");
     expect(renderVaultAttachmentMigrationReport(summary)).toContain("| Notes/Project | Notes/shot.png | Notes/Project/assets/shot.png | ./assets/shot.png |");
+  });
+
+  it("keeps source files when a note write fails after copying targets", async () => {
+    const copied: string[] = [];
+    const deleted: string[] = [];
+
+    await expect(executeAttachmentMigration({
+      reports: [{
+        notePath: bundle.mainFilePath,
+        plan: planAttachmentMigration({
+          bundle,
+          notePath: bundle.mainFilePath,
+          content: "![shot](../shot.png)"
+        })
+      }],
+      exists: async (path) => path === "Notes/shot.png",
+      copyAttachment: async (sourcePath, targetPath) => {
+        copied.push(`${sourcePath}->${targetPath}`);
+      },
+      writeNote: async () => {
+        throw new Error("write failed");
+      },
+      deleteAttachment: async (path) => {
+        deleted.push(path);
+      }
+    })).rejects.toThrow("write failed");
+
+    expect(copied).toEqual(["Notes/shot.png->Notes/Project/assets/shot.png"]);
+    expect(deleted).toEqual([]);
+  });
+
+  it("deletes only non-shared sources after all notes are updated", async () => {
+    const deleted: string[] = [];
+    const writes: string[] = [];
+
+    const firstPlan = planAttachmentMigration({
+      bundle,
+      notePath: bundle.mainFilePath,
+      content: "![shared](../shared.png) ![solo](../solo.png)"
+    });
+    const otherBundle: BundleInfo = {
+      folderPath: "Notes/Other",
+      folderName: "Other",
+      mainFilePath: "Notes/Other/Other.md",
+      assetsFolderPath: "Notes/Other/assets"
+    };
+    const secondPlan = planAttachmentMigration({
+      bundle: otherBundle,
+      notePath: otherBundle.mainFilePath,
+      content: "![shared](../shared.png)"
+    });
+
+    await executeAttachmentMigration({
+      reports: [
+        { notePath: bundle.mainFilePath, plan: firstPlan },
+        { notePath: otherBundle.mainFilePath, plan: secondPlan }
+      ],
+      sharedSourcePaths: new Set(["Notes/shared.png"]),
+      exists: async (path) => path === "Notes/shared.png" || path === "Notes/solo.png",
+      copyAttachment: async () => undefined,
+      writeNote: async (notePath) => {
+        writes.push(notePath);
+      },
+      deleteAttachment: async (path) => {
+        deleted.push(path);
+      }
+    });
+
+    expect(writes).toEqual([bundle.mainFilePath, otherBundle.mainFilePath]);
+    expect(deleted).toEqual(["Notes/solo.png"]);
   });
 });

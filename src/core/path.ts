@@ -43,9 +43,20 @@ export function sanitizeDocumentName(name: string): string {
 }
 
 export function assertValidDocumentName(name: string): void {
+  const trimmed = name.trim();
   const sanitized = sanitizeDocumentName(name);
   if (sanitized.length === 0) {
     throw new Error("Document name cannot be empty.");
+  }
+  if (
+    trimmed === "." ||
+    trimmed === ".." ||
+    hasControlCharacter(name) ||
+    /[. ]$/.test(name) ||
+    /[<>?"*|]/.test(sanitized) ||
+    isWindowsReservedName(stripExtension(sanitized))
+  ) {
+    throw new Error("Document name contains unsupported characters.");
   }
 }
 
@@ -70,6 +81,26 @@ export function isImageFilename(filename: string): boolean {
   return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"].includes(extname(filename));
 }
 
+export function encodeMarkdownPath(path: string): string {
+  return path.split("/").map(encodeMarkdownPathSegment).join("/");
+}
+
+function encodeMarkdownPathSegment(segment: string): string {
+  return encodeURIComponent(segment)
+    .replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function isWindowsReservedName(name: string): boolean {
+  return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(name);
+}
+
+function hasControlCharacter(name: string): boolean {
+  return [...name].some((character) => {
+    const code = character.charCodeAt(0);
+    return code >= 0 && code <= 31;
+  });
+}
+
 export function formatTimestamp(date: Date): string {
   const pad = (value: number): string => String(value).padStart(2, "0");
   return [
@@ -82,4 +113,3 @@ export function formatTimestamp(date: Date): string {
     pad(date.getSeconds())
   ].join("");
 }
-

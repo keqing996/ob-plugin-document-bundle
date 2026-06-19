@@ -22,6 +22,7 @@ interface NativeFileExplorerPatchOptions {
 
 export class NativeFileExplorerPatch {
   private observer: MutationObserver | null = null;
+  private refreshFrame: number | null = null;
   private readonly listeners = new Map<Element, EventListener>();
 
   constructor(private readonly options: NativeFileExplorerPatchOptions) {}
@@ -33,7 +34,7 @@ export class NativeFileExplorerPatch {
     }
 
     this.refresh();
-    this.observer = new MutationObserver(() => this.refresh());
+    this.observer = new MutationObserver(() => this.scheduleRefresh());
     this.observer.observe(doc.body, {
       childList: true,
       subtree: true
@@ -43,6 +44,10 @@ export class NativeFileExplorerPatch {
   disable(): void {
     this.observer?.disconnect();
     this.observer = null;
+    if (this.refreshFrame !== null) {
+      window.cancelAnimationFrame(this.refreshFrame);
+      this.refreshFrame = null;
+    }
 
     for (const [element, listener] of this.listeners) {
       element.removeEventListener("click", listener, true);
@@ -85,6 +90,19 @@ export class NativeFileExplorerPatch {
         this.unmarkBundleNode(node, title);
       }
     }
+  }
+
+  scheduleRefresh(): void {
+    if (this.refreshFrame !== null) {
+      return;
+    }
+
+    // Obsidian updates the file explorer in DOM batches; coalesce those mutations into
+    // one vault/DOM scan so large vaults do not refresh once per changed node.
+    this.refreshFrame = window.requestAnimationFrame(() => {
+      this.refreshFrame = null;
+      this.refresh();
+    });
   }
 
   private markBundleNode(node: Element, title: Element, folderPath: string): void {

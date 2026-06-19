@@ -1,8 +1,8 @@
 import type { AttachmentLinkOptions } from "../types";
-import { isImageFilename } from "./path";
+import { encodeMarkdownPath, isImageFilename } from "./path";
 
 export function createAttachmentMarkdownLink(options: AttachmentLinkOptions): string {
-  const path = `./${options.attachmentFolderName}/${options.filename}`;
+  const path = `./${encodeMarkdownPath(options.attachmentFolderName)}/${encodeMarkdownPath(options.filename)}`;
   const isImage = options.isImage ?? isImageFilename(options.filename);
 
   if (isImage) {
@@ -11,4 +11,3 @@ export function createAttachmentMarkdownLink(options: AttachmentLinkOptions): st
 
   return `[${options.altText ?? options.filename}](${path})`;
 }
-

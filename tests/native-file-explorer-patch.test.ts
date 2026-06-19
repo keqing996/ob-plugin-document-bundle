@@ -46,6 +46,11 @@ describe("native file explorer folder path matching", () => {
 });
 
 describe("native file explorer bundle badge mode", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   for (const mode of ["none", "icon", "bold", "text"] as const) {
     it(`marks bundle nodes with ${mode} badge mode`, () => {
       const child = new FakeNativeElement();
@@ -93,6 +98,44 @@ describe("native file explorer bundle badge mode", () => {
     expect(child.classList.contains(NATIVE_BUNDLE_CHILDREN_CLASS)).toBe(false);
     expect(getBundleIcon(title)).toBeNull();
   });
+
+  it("coalesces multiple scheduled refreshes into one animation frame", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("window", {
+      requestAnimationFrame: (callback: FrameRequestCallback): number => {
+        callbacks.push(callback);
+        return callbacks.length;
+      },
+      cancelAnimationFrame: vi.fn()
+    });
+    const patch = fakePatch("icon");
+    const refresh = vi.spyOn(patch, "refresh").mockImplementation(() => undefined);
+
+    scheduleRefresh(patch);
+    scheduleRefresh(patch);
+
+    expect(callbacks).toHaveLength(1);
+    callbacks[0](0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels a pending scheduled refresh when disabled", () => {
+    const cancelAnimationFrame = vi.fn();
+    vi.stubGlobal("window", {
+      requestAnimationFrame: (): number => 42,
+      cancelAnimationFrame
+    });
+    vi.stubGlobal("activeDocument", {
+      querySelectorAll: () => []
+    });
+    const patch = fakePatch("icon");
+
+    scheduleRefresh(patch);
+    patch.disable();
+    scheduleRefresh(patch);
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42);
+  });
 });
 
 function fakeElement(options: { textContent?: string } & Record<string, string | undefined> = {}): Element {
@@ -132,6 +175,12 @@ function unmarkBundleNode(patch: NativeFileExplorerPatch, node: Element, title: 
   (patch as unknown as {
     unmarkBundleNode(node: Element, title: Element): void;
   }).unmarkBundleNode(node, title);
+}
+
+function scheduleRefresh(patch: NativeFileExplorerPatch): void {
+  (patch as unknown as {
+    scheduleRefresh(): void;
+  }).scheduleRefresh();
 }
 
 class FakeNativeElement {

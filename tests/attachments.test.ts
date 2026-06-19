@@ -17,6 +17,7 @@ type FakeChildSnapshot = { name: string; type: "file" | "folder" };
 class FakeVault {
   readonly files = new Map<string, StoredBinary>();
   readonly folders = new Set<string>([""]);
+  createBinaryError: Error | null = null;
   readonly adapter = {
     exists: async (path: string): Promise<boolean> => this.exists(path)
   };
@@ -47,6 +48,10 @@ class FakeVault {
   }
 
   async createBinary(path: string, data: ArrayBuffer): Promise<void> {
+    if (this.createBinaryError) {
+      throw this.createBinaryError;
+    }
+
     this.files.set(path, data);
   }
 
@@ -245,6 +250,27 @@ describe("Obsidian attachment handlers", () => {
 
     expect(event.prevented).toBe(false);
     expect(vault.files.has("Inbox/assets/brief.pdf")).toBe(false);
+    expect(editor.inserted).toBe("");
+  });
+
+  it("does not insert a link when a pasted attachment cannot be written", async () => {
+    const vault = new FakeVault();
+    vault.addFolder("Project");
+    vault.addFolder("Project/assets");
+    vault.addFile("Project/Project.md");
+    vault.createBinaryError = new Error("disk full");
+    const editor = new FakeEditor();
+    const event = fakePasteEvent([new File(["image"], "shot.png", { type: "image/png" })]);
+
+    await expect(handlePaste(
+      fakePlugin(vault),
+      event as unknown as ClipboardEvent,
+      editor as unknown as Editor,
+      fakeView("Project/Project.md") as unknown as MarkdownView
+    )).rejects.toThrow("disk full");
+
+    expect(event.prevented).toBe(true);
+    expect(vault.files.has("Project/assets/shot.png")).toBe(false);
     expect(editor.inserted).toBe("");
   });
 });

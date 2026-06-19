@@ -1,40 +1,12 @@
 # Documents Bundle
 
-Documents Bundle is an Obsidian plugin for keeping each Markdown document together with its local assets.
+English | [简体中文](README.zh-CN.md)
 
-```text
-Document/
-  Document.md
-  assets/
-```
+A Notion-style attachment experience for Obsidian, without giving up plain Markdown files.
 
-When the active editor is a bundle main document, pasted and dropped attachments are written to that document's `assets/` folder and inserted as relative Markdown links:
+In Notion, you paste an image or drop a PDF and it simply belongs to the page. No attachment folder housekeeping, no "where did that file go?", no little chores stealing focus from writing.
 
-```markdown
-![](./assets/image-20260617-143012.png)
-[brief.pdf](./assets/brief.pdf)
-```
-
-## Overview
-
-Documents Bundle keeps document-specific images, PDFs, and other attachments next to the note that owns them. A bundle is still a normal vault folder, so your files remain portable and can be edited without this plugin.
-
-The plugin also enhances Obsidian's native Files pane. Recognized bundle folders are marked and their internal main Markdown file and `assets/` folder are visually hidden so the bundle reads like one document object. This enhancement is optional and can be disabled in settings.
-
-## Features
-
-1. Create new bundle documents.
-2. Convert existing Markdown notes into bundle documents.
-3. Keep pasted and dropped attachments inside the current bundle.
-4. Rename, duplicate, move, and delete bundles as whole folders.
-5. Migrate existing local attachments into bundle `assets/` folders and rewrite links.
-6. Open bundle documents from a quick picker.
-7. Add native Obsidian file-menu actions for common bundle operations.
-8. Mark bundle folders in Obsidian's native Files pane.
-
-## Usage
-
-Use **New bundle document** to create an untitled bundle, then rename it directly in Obsidian's Files pane. For example, renaming it to `Project Brief` creates:
+Documents Bundle brings that same low-friction feeling to Obsidian. Each Markdown note can live as a small self-contained bundle:
 
 ```text
 Project Brief/
@@ -42,95 +14,92 @@ Project Brief/
   assets/
 ```
 
-When you paste or drop files into `Project Brief.md`, Documents Bundle saves them into `Project Brief/assets/` and inserts links such as:
+Paste an image, drop a PDF, migrate an old local attachment link, and the file lands next to the note instead of wandering off into a vault-wide attachments folder. It feels page-native, but stays plain, portable, and easy to inspect.
+
+## Screenshots
+
+![Documents Bundle overview](images/image.png)
+
+## What It Does
+
+- Creates bundle documents from Obsidian's native file menu.
+- Converts existing Markdown files into bundle folders.
+- Saves pasted and dropped files into the active bundle's `assets/` folder.
+- Inserts portable relative Markdown links like `./assets/sketch.png`.
+- Migrates old local attachment links into the bundle and rewrites the note.
+- Keeps bundle folder renames in sync with the main Markdown file.
+- Marks bundle folders in Obsidian's Files pane, so they read like one document object.
+
+## Why Use It
+
+Obsidian is great at plain files. Attachments are where things can get messy.
+
+Documents Bundle is for notes that should travel with their supporting files: project briefs, research notes, client docs, writing drafts, class notes, anything with screenshots, PDFs, audio, or diagrams attached.
+
+The bundle stays boring on purpose:
+
+```text
+Document/
+  Document.md
+  assets/
+    image.png
+    brief.pdf
+```
+
+No database. No custom archive format. No lock-in. If the plugin is disabled, the folder is still just a folder.
+
+## Usage
+
+### Create a Bundle
+
+In Obsidian's Files pane, right-click a folder and choose **New bundle document here**.
+
+The plugin creates an untitled bundle. Rename the bundle folder directly in the Files pane, and Documents Bundle keeps the main Markdown file name in sync.
+
+```text
+Project Brief/
+  Project Brief.md
+  assets/
+```
+
+### Convert an Existing Note
+
+Right-click a Markdown file in the Files pane and choose **Convert to bundle**.
+
+The plugin moves the note into a same-named folder, creates `assets/`, and updates local attachment links inside the moved note when needed.
+
+### Paste or Drop Attachments
+
+When the active editor is a bundle's main document, pasted and dropped files are saved into that bundle's `assets/` folder.
 
 ```markdown
 ![](./assets/sketch.png)
 [contract.pdf](./assets/contract.pdf)
 ```
 
-To convert an existing note, open the note and run **Convert current note to bundle**. The plugin moves the note into a same-named folder, creates the assets folder, and updates local attachment links inside the moved note when needed.
+Normal notes are left alone. If the current file is not a bundle main document, Obsidian handles paste and drop as usual.
+
+### Migrate Existing Attachments
+
+Right-click a bundle folder and choose **Migrate attachments to bundle**.
+
+Documents Bundle reviews local attachment links, copies the files into `assets/`, and rewrites the note with relative links. Shared source files are copied instead of moved, so one cleanup does not quietly break another bundle.
 
 ## Settings
 
-Documents Bundle uses a fixed bundle structure: a same-name Markdown file plus an `assets/` folder. Only folders with this exact structure are recognized as bundles.
+- **Handle pasted and dropped attachments in bundles** saves incoming files to the active bundle's `assets/` folder.
+- **Enhance native File Explorer** marks bundle folders, hides bundle internals visually, and opens the main document when the bundle title is clicked.
+- **Bundle marker style** lets bundle folders show no marker, a small icon badge, a bold title, or a `Bundle` text badge.
 
-- **Handle pasted and dropped attachments in bundles** saves files pasted or dropped into a bundle's main document to that bundle's `assets/` folder and inserts relative links. Normal notes are never intercepted.
-- **Enhance native File Explorer** marks bundle folders in Obsidian's Files pane, hides bundle internals, and opens the main document when the bundle title is clicked.
-- **Bundle marker style** chooses whether bundle folders show no marker, a small icon badge (default), a bold title, or the text `Bundle` badge in Obsidian's Files pane.
+## Mobile Support
 
-## Mobile support
+Documents Bundle is not desktop-only. Core bundle operations and attachment handling use Obsidian vault APIs and work on mobile.
 
-Documents Bundle is not desktop-only. Core bundle operations and attachment handling use Obsidian vault APIs and are available on mobile.
-
-Opening an assets folder in the operating system file browser is desktop-only. On mobile, or in any environment without a system file-browser API, the plugin shows the vault path of the assets folder instead.
+Opening an `assets/` folder in the operating system file browser is desktop-only. On mobile, or in any environment without a system file-browser API, the plugin shows the vault path instead.
 
 ## Limitations
 
-- The native File Explorer enhancement is visual only. It does not modify Obsidian core files or change the underlying vault structure.
+- The native File Explorer enhancement is visual only. It does not modify Obsidian core files or change your vault structure.
 - Bundle internals are ordinary files. Other plugins, sync tools, and file managers can still see and edit them.
 - The Files pane enhancement depends on Obsidian's current file-explorer DOM structure. If Obsidian changes that structure, disable **Enhance native File Explorer** until the plugin is updated.
 - Attachment migration only rewrites links it can safely resolve to local vault files.
-
-## Manual install
-
-Copy the release artifacts into a vault:
-
-```text
-<vault>/.obsidian/plugins/documents-bundle/
-  main.js
-  manifest.json
-  styles.css
-```
-
-Then enable **Documents Bundle** from Obsidian's Community plugins settings.
-
-## Release artifacts
-
-Obsidian installs these files from each GitHub release:
-
-```text
-main.js
-manifest.json
-styles.css
-```
-
-Create the local release zip:
-
-```bash
-npm run package:release
-```
-
-The zip is written to:
-
-```text
-dist/documents-bundle-1.0.0.zip
-```
-
-For a GitHub release, use the exact tag `1.0.0` with no `v` prefix. Upload `main.js`, `manifest.json`, and `styles.css` as release assets. The zip can be attached as an extra convenience artifact, but it does not replace the three files Obsidian downloads.
-
-## Development
-
-```bash
-npm install
-npm run lint
-npm test
-npm run build
-```
-
-Main validation:
-
-```bash
-npm run verify
-```
-
-`verify` runs lint, unit tests, the isolated Obsidian smoke test, release and mobile-safety validation, high-severity audit, and release packaging.
-
-Useful individual commands:
-
-```bash
-npm run smoke:obsidian
-npm run validate:release
-npm run validate:mobile-safety
-npm run package:release
-```

@@ -11,9 +11,8 @@ describe("attachment links", () => {
       .toBe("[brief.pdf](./assets/brief.pdf)");
   });
 
-  it("keeps readable paths with spaces", () => {
-    expect(createAttachmentMarkdownLink({ attachmentFolderName: "assets", filename: "my file.pdf" }))
-      .toBe("[my file.pdf](./assets/my file.pdf)");
+  it("encodes attachment paths that would break markdown destinations", () => {
+    expect(createAttachmentMarkdownLink({ attachmentFolderName: "assets", filename: "my file (final%).pdf" }))
+      .toBe("[my file (final%).pdf](./assets/my%20file%20%28final%25%29.pdf)");
   });
 });
-
