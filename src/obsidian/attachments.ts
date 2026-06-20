@@ -6,63 +6,73 @@ import { formatTimestamp, isImageFilename, joinVaultPath } from "../core/path";
 import { BUNDLE_ASSETS_FOLDER_NAME } from "../settings";
 import { ObsidianBundleFileSystem } from "./fs";
 
+export interface IncomingAttachmentTarget {
+  assetsFolderPath: string;
+  files: File[];
+}
+
 export async function handlePaste(plugin: DocumentsBundlePlugin, event: ClipboardEvent, editor: Editor, view: MarkdownView): Promise<void> {
-  if (!plugin.settings.handleBundleAttachments) {
-    return;
-  }
-
   if (event.defaultPrevented) {
     return;
   }
 
-  const files = Array.from(event.clipboardData?.files ?? []);
-  if (files.length === 0) {
-    return;
-  }
-
-  await handleIncomingFiles(plugin, event, files, editor, view);
-}
-
-export async function handleDrop(plugin: DocumentsBundlePlugin, event: DragEvent, editor: Editor, view: MarkdownView): Promise<void> {
-  if (!plugin.settings.handleBundleAttachments) {
-    return;
-  }
-
-  if (event.defaultPrevented) {
-    return;
-  }
-
-  const files = Array.from(event.dataTransfer?.files ?? []);
-  if (files.length === 0) {
-    return;
-  }
-
-  await handleIncomingFiles(plugin, event, files, editor, view);
-}
-
-async function handleIncomingFiles(
-  plugin: DocumentsBundlePlugin,
-  event: ClipboardEvent | DragEvent,
-  files: File[],
-  editor: Editor,
-  view: MarkdownView
-): Promise<void> {
-  const currentFile = view.file;
-  if (!currentFile) {
-    return;
-  }
-
-  const bundle = plugin.getBundleInfoForFile(currentFile);
-  if (!bundle) {
+  const target = getPasteAttachmentTarget(plugin, event, view);
+  if (!target) {
     return;
   }
 
   event.preventDefault();
-  await plugin.ensureFolder(bundle.assetsFolderPath);
+  await handleIncomingAttachments(plugin, target, editor);
+}
 
+export async function handleDrop(plugin: DocumentsBundlePlugin, event: DragEvent, editor: Editor, view: MarkdownView): Promise<void> {
+  if (event.defaultPrevented) {
+    return;
+  }
+
+  const target = getDropAttachmentTarget(plugin, event, view);
+  if (!target) {
+    return;
+  }
+
+  event.preventDefault();
+  await handleIncomingAttachments(plugin, target, editor);
+}
+
+export function getPasteAttachmentTarget(plugin: DocumentsBundlePlugin, event: ClipboardEvent, view: MarkdownView): IncomingAttachmentTarget | null {
+  return getIncomingAttachmentTarget(plugin, Array.from(event.clipboardData?.files ?? []), view);
+}
+
+export function getDropAttachmentTarget(plugin: DocumentsBundlePlugin, event: DragEvent, view: MarkdownView): IncomingAttachmentTarget | null {
+  return getIncomingAttachmentTarget(plugin, Array.from(event.dataTransfer?.files ?? []), view);
+}
+
+function getIncomingAttachmentTarget(plugin: DocumentsBundlePlugin, files: File[], view: MarkdownView): IncomingAttachmentTarget | null {
+  if (!plugin.settings.handleBundleAttachments || files.length === 0) {
+    return null;
+  }
+
+  const currentFile = view.file;
+  if (!currentFile) {
+    return null;
+  }
+
+  const bundle = plugin.getBundleInfoForFile(currentFile);
+  if (!bundle) {
+    return null;
+  }
+
+  return {
+    assetsFolderPath: bundle.assetsFolderPath,
+    files
+  };
+}
+
+export async function handleIncomingAttachments(plugin: DocumentsBundlePlugin, target: IncomingAttachmentTarget, editor: Editor): Promise<void> {
+  await plugin.ensureFolder(target.assetsFolderPath);
   const links: string[] = [];
-  for (const file of files) {
-    const filename = await writeIncomingFile(plugin.app.vault, bundle.assetsFolderPath, file);
+  for (const file of target.files) {
+    const filename = await writeIncomingFile(plugin.app.vault, target.assetsFolderPath, file);
     links.push(createAttachmentMarkdownLink({
       attachmentFolderName: BUNDLE_ASSETS_FOLDER_NAME,
       filename,

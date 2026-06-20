@@ -6,7 +6,10 @@ import { basename, joinVaultPath } from "../core/path";
 export class ObsidianBundleFileSystem implements BundleFileSystem {
   constructor(
     private readonly vault: Vault,
-    private readonly options: { afterBundleMainCopied?(path: string): Promise<void> } = {}
+    private readonly options: {
+      afterBundleMainCopied?(path: string): Promise<void>;
+      trashFile?(file: TAbstractFile): Promise<void>;
+    } = {}
   ) {}
 
   async exists(path: string): Promise<boolean> {
@@ -72,9 +75,11 @@ export class ObsidianBundleFileSystem implements BundleFileSystem {
       throw new Error(`Cannot delete missing path: ${path}`);
     }
 
-    // This adapter intentionally depends only on Vault so core bundle operations stay easy to test.
-    // eslint-disable-next-line obsidianmd/prefer-file-manager-trash-file
-    await this.vault.trash(file, true);
+    if (!this.options.trashFile) {
+      throw new Error("Cannot delete path without Obsidian FileManager trash support.");
+    }
+
+    await this.options.trashFile(file);
   }
 
   async deleteEmptyFolderTree(path: string, attempts = 6, delayMs = 150): Promise<boolean> {

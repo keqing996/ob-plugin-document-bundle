@@ -4,7 +4,7 @@ vi.mock("obsidian", () => ({
   TFolder: class TFolder {}
 }));
 
-const { copyFolderRecursive, isFolderTreeEmpty } = await import("../src/obsidian/fs");
+const { copyFolderRecursive, isFolderTreeEmpty, ObsidianBundleFileSystem } = await import("../src/obsidian/fs");
 
 describe("Obsidian bundle filesystem", () => {
   it("copies non-Markdown bundle files through the adapter to avoid attachment plugin relocation hooks", async () => {
@@ -34,6 +34,25 @@ describe("Obsidian bundle filesystem", () => {
   it("detects only folder trees without files as empty", () => {
     expect(isFolderTreeEmpty(fakeFolder("empty", [fakeFolder("nested", [])]) as never)).toBe(true);
     expect(isFolderTreeEmpty(fakeFolder("with file", [fakeFolder("nested", [fakeFile("brief.pdf", "pdf", new ArrayBuffer(0))])]) as never)).toBe(false);
+  });
+
+  it("deletes paths through the injected FileManager trash operation", async () => {
+    const file = fakeFile("Project.md", "md", "# Project\n");
+    const trashedFiles: unknown[] = [];
+    const fs = new ObsidianBundleFileSystem({
+      getAbstractFileByPath: (path: string) => path === "Project.md" ? file : null,
+      adapter: {
+        exists: async () => false
+      }
+    } as never, {
+      trashFile: async (target) => {
+        trashedFiles.push(target);
+      }
+    });
+
+    await fs.delete("Project.md");
+
+    expect(trashedFiles).toEqual([file]);
   });
 });
 

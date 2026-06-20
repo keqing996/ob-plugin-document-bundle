@@ -5,7 +5,7 @@ import { executeAttachmentMigration, planAttachmentMigration, renderVaultAttachm
 import { getAvailableFilename } from "./core/naming";
 import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle, planMarkdownBundleConversion } from "./core/operations";
 import { basename, dirname, formatTimestamp, joinVaultPath } from "./core/path";
-import { handleDrop, handlePaste } from "./obsidian/attachments";
+import { getDropAttachmentTarget, getPasteAttachmentTarget, handleIncomingAttachments } from "./obsidian/attachments";
 import { AttachmentMigrationModal } from "./obsidian/attachment-migration-modal";
 import { openAssetsFolderWithFallback } from "./obsidian/assets-folder";
 import { addBundleFolderMenuItems, addNormalFolderMenuItems, addNormalMarkdownMenuItems } from "./obsidian/file-menu";
@@ -95,6 +95,9 @@ export default class DocumentsBundlePlugin extends Plugin {
         if (file instanceof TFile) {
           await this.app.workspace.getLeaf(false).openFile(file);
         }
+      },
+      trashFile: async (file) => {
+        await this.app.fileManager.trashFile(file);
       }
     });
 
@@ -114,21 +117,33 @@ export default class DocumentsBundlePlugin extends Plugin {
       this.refreshNativeFileExplorerPatch();
     }));
 
-    // The attachment handler decides whether this paste should be claimed.
-    // eslint-disable-next-line obsidianmd/editor-drop-paste
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, view) => {
+      if (event.defaultPrevented) {
+        return;
+      }
       if (view instanceof MarkdownView) {
-        void handlePaste(this, event, editor, view).catch(() => {
+        const target = getPasteAttachmentTarget(this, event, view);
+        if (!target) {
+          return;
+        }
+        event.preventDefault();
+        void handleIncomingAttachments(this, target, editor).catch(() => {
           new Notice(this.t("error.cannotHandleIncomingAttachment"));
         });
       }
     }));
 
-    // The attachment handler decides whether this drop should be claimed.
-    // eslint-disable-next-line obsidianmd/editor-drop-paste
     this.registerEvent(this.app.workspace.on("editor-drop", (event, editor, view) => {
+      if (event.defaultPrevented) {
+        return;
+      }
       if (view instanceof MarkdownView) {
-        void handleDrop(this, event, editor, view).catch(() => {
+        const target = getDropAttachmentTarget(this, event, view);
+        if (!target) {
+          return;
+        }
+        event.preventDefault();
+        void handleIncomingAttachments(this, target, editor).catch(() => {
           new Notice(this.t("error.cannotHandleIncomingAttachment"));
         });
       }
