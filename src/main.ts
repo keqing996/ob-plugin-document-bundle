@@ -3,7 +3,7 @@ import { getBundleInfoFromFolderPath, getBundleInfoFromMainFilePath, isBundleFol
 import { rewriteAttachmentLinksForMovedFile } from "./core/document-links";
 import { executeAttachmentMigration, planAttachmentMigration, renderVaultAttachmentMigrationReport, summarizeVaultAttachmentMigration, validateVaultAttachmentMigration, type AttachmentLinkResolveInput, type AttachmentMigrationExecutionReport, type AttachmentMigrationPlan, type BundleAttachmentMigrationReport, type VaultAttachmentMigrationReport } from "./core/migration";
 import { getAvailableFilename } from "./core/naming";
-import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle } from "./core/operations";
+import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle, planMarkdownBundleConversion } from "./core/operations";
 import { basename, dirname, formatTimestamp, joinVaultPath } from "./core/path";
 import { handleDrop, handlePaste } from "./obsidian/attachments";
 import { AttachmentMigrationModal } from "./obsidian/attachment-migration-modal";
@@ -171,7 +171,7 @@ export default class DocumentsBundlePlugin extends Plugin {
     }
   }
 
-  async convertFileToBundle(file: TFile): Promise<BundleInfo> {
+  async convertFileToBundle(file: TFile): Promise<BundleInfo | null> {
     try {
       const existingBundle = this.getBundleInfoForFile(file);
       if (existingBundle) {
@@ -179,15 +179,31 @@ export default class DocumentsBundlePlugin extends Plugin {
       }
 
       const oldPath = file.path;
-      const bundle = await convertMarkdownToBundle(this.fs, file.path, BUNDLE_ASSETS_FOLDER_NAME);
-      let attachmentLinksRewritten = 0;
+      const plannedBundle = await planMarkdownBundleConversion(this.fs, file.path, BUNDLE_ASSETS_FOLDER_NAME);
+      const attachmentMigrationPlan = await this.planAttachmentMigrationForConvertedFile(file, plannedBundle);
+      if (attachmentMigrationPlan.items.length > 0) {
+        const confirmed = await this.confirmAttachmentMigration(attachmentMigrationPlan, {
+          title: this.t("modal.convertToBundleAttachments.title"),
+          description: this.t("modal.convertToBundleAttachments.description", { count: attachmentMigrationPlan.items.length })
+        });
+        if (!confirmed) {
+          return null;
+        }
+        await this.validateAttachmentMigrationPlan(attachmentMigrationPlan);
+      }
+
+      const bundle = await convertMarkdownToBundle(this.fs, file.path, BUNDLE_ASSETS_FOLDER_NAME, plannedBundle);
       const mainFile = this.app.vault.getAbstractFileByPath(bundle.mainFilePath);
       if (mainFile instanceof TFile) {
-        attachmentLinksRewritten = await this.rewriteMovedBundleMainAttachmentLinks(mainFile, oldPath);
+        if (attachmentMigrationPlan.items.length > 0) {
+          await this.executeAttachmentMigrationReports([{ notePath: mainFile.path, plan: attachmentMigrationPlan }]);
+        } else {
+          await this.rewriteMovedBundleMainAttachmentLinks(mainFile, oldPath);
+        }
         await this.app.workspace.getLeaf(false).openFile(mainFile);
       }
       this.refreshNativeFileExplorerPatch();
-      new Notice(this.t("notice.convertedToBundle", { name: bundle.folderName, count: attachmentLinksRewritten }));
+      new Notice(this.t("notice.convertedToBundle", { name: bundle.folderName, count: attachmentMigrationPlan.items.length }));
       return bundle;
     } catch (error) {
       new Notice(this.errorMessage(error));
@@ -285,10 +301,13 @@ export default class DocumentsBundlePlugin extends Plugin {
     }
   }
 
-  async confirmAttachmentMigration(plan: AttachmentMigrationPlan): Promise<boolean> {
+  async confirmAttachmentMigration(
+    plan: AttachmentMigrationPlan,
+    options: { title?: string; description?: string } = {}
+  ): Promise<boolean> {
     return new AttachmentMigrationModal(this.app, {
-      title: this.t("modal.migrateAttachments.title"),
-      description: this.t("modal.migrateAttachments.description", { count: plan.items.length }),
+      title: options.title ?? this.t("modal.migrateAttachments.title"),
+      description: options.description ?? this.t("modal.migrateAttachments.description", { count: plan.items.length }),
       sourceLabel: this.t("modal.migrateAttachments.source"),
       targetLabel: this.t("modal.migrateAttachments.target"),
       confirmLabel: this.t("button.confirm"),
@@ -527,6 +546,39 @@ export default class DocumentsBundlePlugin extends Plugin {
       existingTargetPaths: this.collectExistingAssetPaths(bundle.assetsFolderPath),
       resolveLinkTarget: (link) => this.resolveObsidianAttachmentTarget(link)
     });
+  }
+
+  private async planAttachmentMigrationForConvertedFile(file: TFile, bundle: BundleInfo): Promise<AttachmentMigrationPlan> {
+    const content = await this.app.vault.read(file);
+    const migrationPlan = planAttachmentMigration({
+      bundle,
+      notePath: file.path,
+      content,
+      resolveLinkTarget: (link) => this.resolveObsidianAttachmentTarget(link)
+    });
+    const migratedTargets = new Set(migrationPlan.items.map((item) => item.rewrittenTarget));
+    const movedLinkRewrite = rewriteAttachmentLinksForMovedFile({
+      oldNotePath: file.path,
+      newNotePath: bundle.mainFilePath,
+      content: migrationPlan.updatedContent,
+      ignoredTargets: migratedTargets
+    });
+
+    return {
+      items: migrationPlan.items,
+      updatedContent: movedLinkRewrite.updatedContent
+    };
+  }
+
+  private async validateAttachmentMigrationPlan(plan: AttachmentMigrationPlan): Promise<void> {
+    for (const item of plan.items) {
+      if (!await this.fs.exists(item.sourcePath)) {
+        throw new Error(this.t("error.cannotMigrateMissingAttachment", { path: item.sourcePath }));
+      }
+      if (await this.fs.exists(item.targetPath)) {
+        throw new Error(this.t("error.cannotMigrateAttachmentTargetExists", { path: item.targetPath }));
+      }
+    }
   }
 
   private collectExistingAssetPaths(assetsFolderPath: string): Set<string> {

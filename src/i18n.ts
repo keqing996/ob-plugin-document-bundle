@@ -17,6 +17,8 @@ const EN_TRANSLATIONS = {
   "modal.migrateAttachments.description": "Review {count} attachment(s) that will be moved into this bundle. Links in the bundle document will be rewritten.",
   "modal.migrateAttachments.source": "From",
   "modal.migrateAttachments.target": "To",
+  "modal.convertToBundleAttachments.title": "Convert to bundle",
+  "modal.convertToBundleAttachments.description": "Review {count} attachment(s) that will be moved into the new bundle. Links in the converted document will be rewritten.",
 
   "settings.title": "Documents Bundle",
   "settings.bundleStructure.name": "Bundle structure",
@@ -37,7 +39,7 @@ const EN_TRANSLATIONS = {
 
   "notice.assetsFolder": "Assets folder: {path}",
   "notice.scanBundles": "Bundles: {bundles}, normal Markdown files: {markdownFiles}, incomplete candidates: {incompleteCandidates}",
-  "notice.convertedToBundle": "Converted to bundle: {name}. Updated {count} attachment link(s).",
+  "notice.convertedToBundle": "Converted to bundle: {name}. Migrated {count} attachment(s).",
   "notice.bundleMainFileNotFound": "Bundle main file not found: {path}",
   "notice.duplicatedBundle": "Duplicated bundle: {name}",
   "notice.noAttachmentsNeedMigration": "No attachments need migration.",
@@ -98,6 +100,8 @@ const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
   "modal.migrateAttachments.description": "以下 {count} 个附件会移动到当前文档包中，文档里的链接会同步重写。",
   "modal.migrateAttachments.source": "来源",
   "modal.migrateAttachments.target": "目标",
+  "modal.convertToBundleAttachments.title": "转换为文档包",
+  "modal.convertToBundleAttachments.description": "以下 {count} 个附件会移动到新文档包中，转换后的文档链接会同步重写。",
 
   "settings.title": "Documents Bundle",
   "settings.bundleStructure.name": "文档包结构",
@@ -118,7 +122,7 @@ const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
 
   "notice.assetsFolder": "附件文件夹：{path}",
   "notice.scanBundles": "文档包：{bundles}，普通 Markdown 文件：{markdownFiles}，不完整候选项：{incompleteCandidates}",
-  "notice.convertedToBundle": "已转换为文档包：{name}。已更新 {count} 个附件链接。",
+  "notice.convertedToBundle": "已转换为文档包：{name}。已迁移 {count} 个附件。",
   "notice.bundleMainFileNotFound": "找不到文档包主文件：{path}",
   "notice.duplicatedBundle": "已复制文档包：{name}",
   "notice.noAttachmentsNeedMigration": "没有需要迁移的附件。",

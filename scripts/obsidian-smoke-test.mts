@@ -375,11 +375,27 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
     await sleep(250);
     assert(!pathExists('Regular Folder/Existing Bundle copy'), 'Deleted bundle still exists.');
 
-    await plugin.convertFileToBundle(file('Conversion Links/Plan.md'));
+    const previousConfirmConversionMigration = plugin.confirmAttachmentMigration;
+    plugin.confirmAttachmentMigration = async () => true;
+    try {
+      await plugin.convertFileToBundle(file('Conversion Links/Plan.md'));
+    } finally {
+      plugin.confirmAttachmentMigration = previousConfirmConversionMigration;
+    }
     await sleep(500);
     assert(pathExists('Conversion Links/Plan/Plan.md'), 'Converted bundle main file missing.');
     assert(pathExists('Conversion Links/Plan/assets'), 'Converted bundle assets folder missing.');
     assert(!pathExists('Conversion Links/Plan.md'), 'Original converted markdown file still exists.');
+    assert(pathExists('Conversion Links/Plan/assets/cover.png'), 'Converted bundle did not migrate cover.png.');
+    assert(pathExists('Conversion Links/Plan/assets/brief.pdf'), 'Converted bundle did not migrate brief.pdf.');
+    assert(pathExists('Conversion Links/Plan/assets/chart.png'), 'Converted bundle did not migrate chart.png.');
+    assert(!pathExists('Conversion Links/External/cover.png'), 'Converted bundle left cover.png at source.');
+    assert(!pathExists('Conversion Links/External/brief.pdf'), 'Converted bundle left brief.pdf at source.');
+    assert(!pathExists('Conversion Links/External/chart.png'), 'Converted bundle left chart.png at source.');
+    const convertedPlanContent = await readText('Conversion Links/Plan/Plan.md');
+    assert(convertedPlanContent.includes('![Cover](./assets/cover.png)'), 'Conversion did not rewrite cover link to bundle assets.');
+    assert(convertedPlanContent.includes('[Brief](./assets/brief.pdf)'), 'Conversion did not rewrite brief link to bundle assets.');
+    assert(convertedPlanContent.includes('![Chart](./assets/chart.png)'), 'Conversion did not rewrite wiki chart link to bundle assets.');
     const indexContent = await readText('Conversion Links/Index.md');
     assert(indexContent.includes('[Plan](Plan.md)'), 'Conversion should not rewrite markdown document links in other notes.');
     assert(indexContent.includes('[[Plan|Plan wiki link]]'), 'Conversion should not rewrite wiki document links in other notes.');

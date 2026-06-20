@@ -9,6 +9,7 @@ export interface MovedFileAttachmentLinkRewriteInput {
   oldNotePath: string;
   newNotePath: string;
   content: string;
+  ignoredTargets?: ReadonlySet<string>;
 }
 
 interface ParsedMarkdownLink {
@@ -26,6 +27,9 @@ export function rewriteAttachmentLinksForMovedFile(input: MovedFileAttachmentLin
 
   for (const link of parseMarkdownLinks(input.content)) {
     const reference = splitTargetReference(link.target);
+    if (input.ignoredTargets?.has(link.target)) {
+      continue;
+    }
     if (!isLocalRelativeTarget(reference.path) || !isAttachmentTarget(reference.path)) {
       continue;
     }

@@ -66,7 +66,7 @@ Project Brief/
 
 Right-click a Markdown file in the Files pane and choose **Convert to bundle**.
 
-The plugin moves the note into a same-named folder, creates `assets/`, and updates local attachment links inside the moved note when needed.
+The plugin previews any local attachments that will be moved, asks for confirmation, then moves the note into a same-named folder, creates `assets/`, migrates those attachments into the bundle, and rewrites their links.
 
 ### Paste or Drop Attachments
 

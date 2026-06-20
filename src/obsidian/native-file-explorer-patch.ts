@@ -11,6 +11,36 @@ export const NATIVE_BUNDLE_ICON_CLASS = "documents-bundle-native-bundle-icon";
 const NATIVE_BUNDLE_ICON_ID = "package";
 
 type OpenBundle = (folderPath: string) => Promise<void>;
+type NativeFileExplorerPassName = "desktop" | "mobile";
+
+interface NativeFileExplorerPass {
+  name: NativeFileExplorerPassName;
+  folderSelector: string;
+  titleSelfSelector: string;
+  titleSelector: string;
+  childrenSelector: string;
+  clickThroughSelector: string;
+}
+
+const DESKTOP_FILE_EXPLORER_PASS: NativeFileExplorerPass = {
+  name: "desktop",
+  folderSelector: ".workspace-leaf-content[data-type='file-explorer'] .nav-folder, .nav-folder",
+  titleSelfSelector: ".nav-folder-title",
+  titleSelector: ":scope > .nav-folder-title, .nav-folder-title",
+  childrenSelector: ":scope > .nav-folder-children, :scope > .tree-item-children, .nav-folder-children, .tree-item-children",
+  clickThroughSelector: ".nav-folder-collapse-indicator, .tree-item-icon, .collapse-icon"
+};
+
+const MOBILE_FILE_EXPLORER_PASS: NativeFileExplorerPass = {
+  name: "mobile",
+  folderSelector: ".workspace-drawer .tree-item, .workspace-drawer .nav-folder, .mobile-sidebar .tree-item, .mobile-sidebar .nav-folder, .nav-files-container .tree-item, .nav-files-container .nav-folder, .tree-item, .nav-folder",
+  titleSelfSelector: ".tree-item-self, .nav-folder-title",
+  titleSelector: ":scope > .tree-item-self, :scope > .nav-folder-title, .tree-item-self, .nav-folder-title",
+  childrenSelector: ":scope > .tree-item-children, :scope > .nav-folder-children, .tree-item-children, .nav-folder-children",
+  clickThroughSelector: ".tree-item-icon, .nav-folder-collapse-indicator, .collapse-icon"
+};
+
+const NATIVE_PATH_ATTRIBUTES = ["data-path", "data-file-path", "data-folder-path", "aria-label", "title"] as const;
 
 interface NativeFileExplorerPatchOptions {
   app: App;
@@ -29,7 +59,7 @@ export class NativeFileExplorerPatch {
 
   enable(): void {
     const doc = getActiveDocument();
-    if (!Platform.isDesktopApp || !doc.body) {
+    if (!doc.body) {
       return;
     }
 
@@ -68,16 +98,17 @@ export class NativeFileExplorerPatch {
 
   refresh(): void {
     const doc = getActiveDocument();
-    if (!Platform.isDesktopApp || !doc.body) {
+    if (!doc.body) {
       return;
     }
 
+    const pass = getNativeFileExplorerPass();
     const bundlePaths = this.collectBundleFolderPaths();
-    const folderNodes = doc.querySelectorAll(".workspace-leaf-content[data-type='file-explorer'] .nav-folder, .nav-folder");
+    const folderNodes = doc.querySelectorAll(pass.folderSelector);
     const seenTitles = new Set<Element>();
 
     for (const node of Array.from(folderNodes)) {
-      const title = getFolderTitleElement(node);
+      const title = getFolderTitleElement(node, pass);
       if (!title || seenTitles.has(title)) {
         continue;
       }
@@ -85,9 +116,9 @@ export class NativeFileExplorerPatch {
 
       const folderPath = getFolderPathFromNativeNode(node, title, bundlePaths);
       if (folderPath && bundlePaths.has(folderPath)) {
-        this.markBundleNode(node, title, folderPath);
+        this.markBundleNode(node, title, folderPath, pass);
       } else {
-        this.unmarkBundleNode(node, title);
+        this.unmarkBundleNode(node, title, pass);
       }
     }
   }
@@ -105,15 +136,20 @@ export class NativeFileExplorerPatch {
     });
   }
 
-  private markBundleNode(node: Element, title: Element, folderPath: string): void {
+  private markBundleNode(
+    node: Element,
+    title: Element,
+    folderPath: string,
+    pass: NativeFileExplorerPass = DESKTOP_FILE_EXPLORER_PASS
+  ): void {
     const previousPath = (title as HTMLElement).dataset.documentsBundlePath;
     if (previousPath && previousPath !== folderPath) {
-      this.unmarkBundleNode(node, title);
+      this.unmarkBundleNode(node, title, pass);
     }
 
     node.classList.add(NATIVE_BUNDLE_CLASS);
     title.classList.add(NATIVE_BUNDLE_TITLE_CLASS);
-    getFolderChildrenElement(node)?.classList.add(NATIVE_BUNDLE_CHILDREN_CLASS);
+    getFolderChildrenElement(node, pass)?.classList.add(NATIVE_BUNDLE_CHILDREN_CLASS);
     (node as HTMLElement).dataset.documentsBundlePath = folderPath;
     (title as HTMLElement).dataset.documentsBundlePath = folderPath;
     this.updateBundleBadge(title);
@@ -124,7 +160,7 @@ export class NativeFileExplorerPatch {
     }
 
     const listener = ((event: MouseEvent) => {
-      if (shouldLetNativeFolderClickContinue(event)) {
+      if (shouldLetNativeFolderClickContinue(event, pass)) {
         return;
       }
 
@@ -137,10 +173,14 @@ export class NativeFileExplorerPatch {
     this.listeners.set(title, listener);
   }
 
-  private unmarkBundleNode(node: Element, title: Element): void {
+  private unmarkBundleNode(
+    node: Element,
+    title: Element,
+    pass: NativeFileExplorerPass = DESKTOP_FILE_EXPLORER_PASS
+  ): void {
     node.classList.remove(NATIVE_BUNDLE_CLASS);
     title.classList.remove(NATIVE_BUNDLE_TITLE_CLASS, NATIVE_BUNDLE_TITLE_ACTIVE_CLASS);
-    getFolderChildrenElement(node)?.classList.remove(NATIVE_BUNDLE_CHILDREN_CLASS);
+    getFolderChildrenElement(node, pass)?.classList.remove(NATIVE_BUNDLE_CHILDREN_CLASS);
     delete (node as HTMLElement).dataset.documentsBundlePath;
     delete (title as HTMLElement).dataset.documentsBundlePath;
     delete (title as HTMLElement).dataset.documentsBundleLabel;
@@ -203,9 +243,15 @@ function getActiveDocument(): Document {
   return activeDocument;
 }
 
+function getNativeFileExplorerPass(): NativeFileExplorerPass {
+  return Platform.isDesktopApp
+    ? DESKTOP_FILE_EXPLORER_PASS
+    : MOBILE_FILE_EXPLORER_PASS;
+}
+
 export function getFolderPathFromNativeNode(node: Element, title: Element, bundlePaths: Set<string>): string | null {
-  for (const element of [title, node]) {
-    for (const attribute of ["data-path", "aria-label", "title"]) {
+  for (const element of getPathCandidateElements(node, title)) {
+    for (const attribute of NATIVE_PATH_ATTRIBUTES) {
       const value = element.getAttribute(attribute)?.trim();
       if (value && bundlePaths.has(value)) {
         return value;
@@ -215,16 +261,27 @@ export function getFolderPathFromNativeNode(node: Element, title: Element, bundl
   return null;
 }
 
-function getFolderTitleElement(node: Element): Element | null {
-  if (node.matches(".nav-folder-title")) {
-    return node;
+function getPathCandidateElements(node: Element, title: Element): Element[] {
+  const elements = [title, node];
+  for (const attribute of NATIVE_PATH_ATTRIBUTES) {
+    for (const candidate of [title.querySelector(`[${attribute}]`), node.querySelector(`[${attribute}]`)]) {
+      if (candidate && !elements.includes(candidate)) {
+        elements.push(candidate);
+      }
+    }
   }
-  return node.querySelector(".nav-folder-title");
+  return elements;
 }
 
-function getFolderChildrenElement(node: Element): Element | null {
-  return node.querySelector(":scope > .nav-folder-children, :scope > .tree-item-children")
-    || node.querySelector(".nav-folder-children, .tree-item-children");
+function getFolderTitleElement(node: Element, pass: NativeFileExplorerPass): Element | null {
+  if (node.matches(pass.titleSelfSelector)) {
+    return node;
+  }
+  return node.querySelector(pass.titleSelector);
+}
+
+function getFolderChildrenElement(node: Element, pass: NativeFileExplorerPass): Element | null {
+  return node.querySelector(pass.childrenSelector);
 }
 
 function ensureBundleIconElement(title: Element): HTMLElement {
@@ -248,13 +305,13 @@ function getBundleIconElement(title: Element): HTMLElement | null {
   return title.querySelector(`.${NATIVE_BUNDLE_ICON_CLASS}`);
 }
 
-function shouldLetNativeFolderClickContinue(event: MouseEvent): boolean {
+function shouldLetNativeFolderClickContinue(event: MouseEvent, pass: NativeFileExplorerPass): boolean {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
     return true;
   }
 
   const target = event.target instanceof Element ? event.target : null;
-  return Boolean(target?.closest(".nav-folder-collapse-indicator, .tree-item-icon, .collapse-icon"));
+  return Boolean(target?.closest(pass.clickThroughSelector));
 }
 
 function getBundleFolderChildSnapshots(folder: TFolder): BundleFolderChildSnapshot[] {

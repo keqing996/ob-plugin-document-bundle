@@ -1,6 +1,6 @@
 {
   "name": "documents-bundle",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "An Obsidian plugin for self-contained Markdown document bundles.",
   "main": "main.js",
   "scripts": {

@@ -1,5 +1,5 @@
 import { getBundleInfoFromFolderPath } from "../src/core/bundle";
-import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle, renameBundle } from "../src/core/operations";
+import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle, planMarkdownBundleConversion, renameBundle } from "../src/core/operations";
 import { MemoryBundleFileSystem } from "./memory-fs";
 
 describe("bundle operations", () => {
@@ -41,6 +41,25 @@ describe("bundle operations", () => {
     const content = await fs.readTextFile("Work/Plan/Plan.md");
     expect(content).toBe("# Plan");
     await expect(fs.exists("Work/Plan/assets")).resolves.toBe(true);
+  });
+
+  it("plans a stable conversion target before converting", async () => {
+    const fs = new MemoryBundleFileSystem();
+    await fs.createFolder("Work");
+    await fs.createTextFile("Work/Plan.md", "# Plan");
+
+    const planned = await planMarkdownBundleConversion(fs, "Work/Plan.md");
+
+    expect(planned).toEqual({
+      folderPath: "Work/Plan",
+      folderName: "Plan",
+      mainFilePath: "Work/Plan/Plan.md",
+      assetsFolderPath: "Work/Plan/assets"
+    });
+
+    await fs.createFolder("Work/Plan");
+    await expect(convertMarkdownToBundle(fs, "Work/Plan.md", "assets", planned))
+      .rejects.toThrow("Path already exists: Work/Plan");
   });
 
   it("renames the folder and main markdown file together", async () => {

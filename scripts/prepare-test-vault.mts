@@ -62,10 +62,26 @@ await writeFile(
 await writeFile(resolve(vaultRoot, "Shared Attachment", "External", "shared.png"), "fake shared png\n");
 
 await mkdir(resolve(vaultRoot, "Conversion Links"), { recursive: true });
-await writeFile(resolve(vaultRoot, "Conversion Links", "Plan.md"), "# Plan\n\n");
+await mkdir(resolve(vaultRoot, "Conversion Links", "External"), { recursive: true });
+await writeFile(
+  resolve(vaultRoot, "Conversion Links", "Plan.md"),
+  [
+    "# Plan",
+    "",
+    "![Cover](External/cover.png)",
+    "",
+    "[Brief](External/brief.pdf)",
+    "",
+    "![[Conversion Links/External/chart.png|Chart]]",
+    ""
+  ].join("\n")
+);
 await writeFile(
   resolve(vaultRoot, "Conversion Links", "Index.md"),
   "# Index\n\n[Plan](Plan.md)\n\n[[Plan|Plan wiki link]]\n"
 );
+await writeFile(resolve(vaultRoot, "Conversion Links", "External", "cover.png"), "fake cover\n");
+await writeFile(resolve(vaultRoot, "Conversion Links", "External", "brief.pdf"), "fake conversion pdf\n");
+await writeFile(resolve(vaultRoot, "Conversion Links", "External", "chart.png"), "fake conversion chart\n");
 
 console.log(`Prepared test vault: ${vaultRoot}`);

@@ -22,7 +22,8 @@
 }
 
 .documents-bundle-native-bundle-title[data-documents-bundle-badge="bold"],
-.documents-bundle-native-bundle-title[data-documents-bundle-badge="bold"] .nav-folder-title-content {
+.documents-bundle-native-bundle-title[data-documents-bundle-badge="bold"] .nav-folder-title-content,
+.documents-bundle-native-bundle-title[data-documents-bundle-badge="bold"] .tree-item-inner {
   font-weight: 600;
 }
 
@@ -54,6 +55,7 @@
 }
 
 .documents-bundle-native-bundle-title > .nav-folder-collapse-indicator,
+.documents-bundle-native-bundle-title > .tree-item-icon,
 .documents-bundle-native-bundle-title > .collapse-icon {
   display: none;
 }

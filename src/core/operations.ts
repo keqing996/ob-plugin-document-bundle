@@ -35,6 +35,21 @@ export async function createBundleDocument(
 export async function convertMarkdownToBundle(
   fs: BundleFileSystem,
   filePath: string,
+  attachmentFolderName = "assets",
+  plannedBundle?: BundleInfo
+): Promise<BundleInfo> {
+  const bundle = plannedBundle ?? await planMarkdownBundleConversion(fs, filePath, attachmentFolderName);
+
+  await fs.createFolder(bundle.folderPath);
+  await fs.rename(filePath, bundle.mainFilePath);
+  await fs.createFolder(bundle.assetsFolderPath);
+
+  return bundle;
+}
+
+export async function planMarkdownBundleConversion(
+  fs: BundleFileSystem,
+  filePath: string,
   attachmentFolderName = "assets"
 ): Promise<BundleInfo> {
   const fileName = basename(filePath);
@@ -46,10 +61,6 @@ export async function convertMarkdownToBundle(
   const documentName = stripMarkdownExtension(fileName);
   const targetName = await getAvailableDocumentName(fs, parentPath, documentName);
   const paths = buildBundlePaths(parentPath, targetName, attachmentFolderName);
-
-  await fs.createFolder(paths.folderPath);
-  await fs.rename(filePath, paths.mainFilePath);
-  await fs.createFolder(paths.assetsFolderPath);
 
   return {
     folderPath: paths.folderPath,
