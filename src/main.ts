@@ -4,7 +4,7 @@ import { rewriteAttachmentLinksForMovedFile } from "./core/document-links";
 import { executeAttachmentMigration, planAttachmentMigration, renderVaultAttachmentMigrationReport, summarizeVaultAttachmentMigration, validateVaultAttachmentMigration, type AttachmentLinkResolveInput, type AttachmentMigrationExecutionReport, type AttachmentMigrationPlan, type BundleAttachmentMigrationReport, type VaultAttachmentMigrationReport } from "./core/migration";
 import { getAvailableFilename } from "./core/naming";
 import { copyBundle, convertMarkdownToBundle, createBundleDocument, deleteBundle, moveBundle, planMarkdownBundleConversion } from "./core/operations";
-import { basename, dirname, formatTimestamp, joinVaultPath } from "./core/path";
+import { basename, dirname, formatTimestamp, joinVaultPath, stripMarkdownExtension } from "./core/path";
 import { getDropAttachmentTarget, getPasteAttachmentTarget, handleIncomingAttachments } from "./obsidian/attachments";
 import { AttachmentMigrationModal } from "./obsidian/attachment-migration-modal";
 import { openAssetsFolderWithFallback } from "./obsidian/assets-folder";
@@ -483,12 +483,12 @@ export default class DocumentsBundlePlugin extends Plugin {
   }
 
   private async handleVaultRename(file: TAbstractFile, oldPath: string): Promise<void> {
-    if (!(file instanceof TFolder)) {
-      return;
-    }
-
     try {
-      await this.syncRenamedBundleFolder(file, oldPath);
+      if (file instanceof TFolder) {
+        await this.syncRenamedBundleFolder(file, oldPath);
+      } else if (file instanceof TFile) {
+        await this.syncRenamedBundleMainFile(file, oldPath);
+      }
     } catch (error) {
       new Notice(this.errorMessage(error));
     } finally {
@@ -515,6 +515,39 @@ export default class DocumentsBundlePlugin extends Plugin {
     }
 
     await this.app.fileManager.renameFile(currentMainFile, targetMainFilePath);
+  }
+
+  private async syncRenamedBundleMainFile(file: TFile, oldPath: string): Promise<void> {
+    if (file.extension !== "md") {
+      return;
+    }
+
+    const oldBundle = getBundleInfoFromMainFilePath(oldPath, BUNDLE_ASSETS_FOLDER_NAME);
+    if (!oldBundle || dirname(file.path) !== oldBundle.folderPath) {
+      return;
+    }
+
+    const folder = this.app.vault.getAbstractFileByPath(oldBundle.folderPath);
+    if (!(folder instanceof TFolder)) {
+      return;
+    }
+
+    const newFolderName = stripMarkdownExtension(basename(file.path));
+    if (newFolderName === oldBundle.folderName) {
+      return;
+    }
+
+    if (!hasStrictBundleChildrenWithMainFile(folder, basename(file.path), BUNDLE_ASSETS_FOLDER_NAME)) {
+      return;
+    }
+
+    const targetFolderPath = joinVaultPath(dirname(oldBundle.folderPath), newFolderName);
+    const existingTarget = this.app.vault.getAbstractFileByPath(targetFolderPath);
+    if (existingTarget && existingTarget !== folder) {
+      throw new Error(`Cannot rename bundle: target folder "${newFolderName}" already exists.`);
+    }
+
+    await this.app.fileManager.renameFile(folder, targetFolderPath);
   }
 
   private async findRenamedBundleMainFile(
@@ -787,7 +820,10 @@ function getPendingRenamedBundleMainFile(folder: TFolder, oldFolderName: string,
 }
 
 function hasStrictPendingRenamedBundleChildren(folder: TFolder, oldFolderName: string, attachmentFolderName: string): boolean {
-  const mainFileName = `${oldFolderName}.md`;
+  return hasStrictBundleChildrenWithMainFile(folder, `${oldFolderName}.md`, attachmentFolderName);
+}
+
+function hasStrictBundleChildrenWithMainFile(folder: TFolder, mainFileName: string, attachmentFolderName: string): boolean {
   return folder.children.length === 2
     && folder.children.some((entry) => entry instanceof TFile && entry.name === mainFileName)
     && folder.children.some((entry) => entry instanceof TFolder && entry.name === attachmentFolderName);
