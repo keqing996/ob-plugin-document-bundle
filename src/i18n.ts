@@ -22,7 +22,7 @@ const EN_TRANSLATIONS = {
 
   "settings.title": "Documents Bundle",
   "settings.bundleStructure.name": "Bundle structure",
-  "settings.bundleStructure.desc": "Bundles use a fixed structure: a same-name Markdown file plus an assets folder. Only folders with this exact structure are recognized as bundles.",
+  "settings.bundleStructure.desc": "Bundles use a simple structure: a same-name Markdown file, with an assets folder created when attachments are added. Folders with only the same-name Markdown file are also recognized as bundles.",
   "settings.handleBundleAttachments.name": "Handle pasted and dropped attachments in bundles",
   "settings.handleBundleAttachments.desc": "When enabled, pasted or dropped files in a bundle's main document are saved to that bundle's assets folder and inserted as relative links. When disabled, paste and drop handling is left entirely to Obsidian. Normal notes are never intercepted.",
   "settings.enhanceNativeFileExplorer.name": "Enhance native File Explorer",
@@ -105,7 +105,7 @@ const ZH_TRANSLATIONS: Record<TranslationKey, string> = {
 
   "settings.title": "Documents Bundle",
   "settings.bundleStructure.name": "文档包结构",
-  "settings.bundleStructure.desc": "文档包使用固定结构：同名 Markdown 文件 + assets 文件夹。只有精确符合该结构的文件夹才会被识别为文档包。",
+  "settings.bundleStructure.desc": "文档包使用简单结构：同名 Markdown 文件，添加附件时会创建 assets 文件夹。只有同名 Markdown 文件的文件夹也会被识别为文档包。",
   "settings.handleBundleAttachments.name": "接管文档包内的附件粘贴与拖入",
   "settings.handleBundleAttachments.desc": "开启后，在文档包主文档中粘贴或拖入文件时，插件会将附件保存到该文档包的 assets 文件夹并插入相对链接。关闭后，粘贴和拖入行为完全交给 Obsidian 处理。普通笔记始终不受影响。",
   "settings.enhanceNativeFileExplorer.name": "增强原生文件列表",

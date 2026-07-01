@@ -67,9 +67,33 @@ export type BundleFolderChildSnapshot =
 export function isBundleFolderSnapshot(folderPath: string, children: BundleFolderChildSnapshot[], attachmentFolderName = "assets"): boolean {
   const folderName = basename(folderPath);
   const expectedMainName = `${folderName}.md`;
-  return children.length === 2
-    && children.some((child) => childSnapshotName(child) === expectedMainName && childSnapshotType(child) !== "folder")
-    && children.some((child) => childSnapshotName(child) === attachmentFolderName && childSnapshotType(child) !== "file");
+  let mainFileCount = 0;
+  let assetsFolderCount = 0;
+
+  for (const child of children) {
+    const childName = childSnapshotName(child);
+    const childType = childSnapshotType(child);
+
+    if (childName === expectedMainName) {
+      if (childType === "folder") {
+        return false;
+      }
+      mainFileCount += 1;
+      continue;
+    }
+
+    if (childName === attachmentFolderName) {
+      if (childType === "file") {
+        return false;
+      }
+      assetsFolderCount += 1;
+      continue;
+    }
+
+    return false;
+  }
+
+  return mainFileCount === 1 && assetsFolderCount <= 1;
 }
 
 function childSnapshotName(child: BundleFolderChildSnapshot): string {

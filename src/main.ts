@@ -537,7 +537,7 @@ export default class DocumentsBundlePlugin extends Plugin {
       return;
     }
 
-    if (!hasStrictBundleChildrenWithMainFile(folder, basename(file.path), BUNDLE_ASSETS_FOLDER_NAME)) {
+    if (!hasBundleChildrenWithMainFile(folder, basename(file.path), BUNDLE_ASSETS_FOLDER_NAME)) {
       return;
     }
 
@@ -566,7 +566,7 @@ export default class DocumentsBundlePlugin extends Plugin {
       }
 
       const file = this.app.vault.getAbstractFileByPath(currentMainFilePath);
-      if (file instanceof TFile && hasStrictPendingRenamedBundleChildren(folder, oldFolderName, attachmentFolderName)) {
+      if (file instanceof TFile && hasPendingRenamedBundleChildren(folder, oldFolderName, attachmentFolderName)) {
         return file;
       }
 
@@ -810,7 +810,7 @@ function getBundleFolderChildSnapshots(folder: TFolder): BundleFolderChildSnapsh
 }
 
 function getPendingRenamedBundleMainFile(folder: TFolder, oldFolderName: string, attachmentFolderName: string): TFile | null {
-  if (!hasStrictPendingRenamedBundleChildren(folder, oldFolderName, attachmentFolderName)) {
+  if (!hasPendingRenamedBundleChildren(folder, oldFolderName, attachmentFolderName)) {
     return null;
   }
 
@@ -819,14 +819,29 @@ function getPendingRenamedBundleMainFile(folder: TFolder, oldFolderName: string,
   return child instanceof TFile ? child : null;
 }
 
-function hasStrictPendingRenamedBundleChildren(folder: TFolder, oldFolderName: string, attachmentFolderName: string): boolean {
-  return hasStrictBundleChildrenWithMainFile(folder, `${oldFolderName}.md`, attachmentFolderName);
+function hasPendingRenamedBundleChildren(folder: TFolder, oldFolderName: string, attachmentFolderName: string): boolean {
+  return hasBundleChildrenWithMainFile(folder, `${oldFolderName}.md`, attachmentFolderName);
 }
 
-function hasStrictBundleChildrenWithMainFile(folder: TFolder, mainFileName: string, attachmentFolderName: string): boolean {
-  return folder.children.length === 2
-    && folder.children.some((entry) => entry instanceof TFile && entry.name === mainFileName)
-    && folder.children.some((entry) => entry instanceof TFolder && entry.name === attachmentFolderName);
+function hasBundleChildrenWithMainFile(folder: TFolder, mainFileName: string, attachmentFolderName: string): boolean {
+  let mainFileCount = 0;
+  let assetsFolderCount = 0;
+
+  for (const entry of folder.children) {
+    if (entry instanceof TFile && entry.name === mainFileName) {
+      mainFileCount += 1;
+      continue;
+    }
+
+    if (entry instanceof TFolder && entry.name === attachmentFolderName) {
+      assetsFolderCount += 1;
+      continue;
+    }
+
+    return false;
+  }
+
+  return mainFileCount === 1 && assetsFolderCount <= 1;
 }
 
 function stripObsidianLinkReference(target: string): string {

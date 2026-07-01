@@ -127,6 +127,23 @@ describe("bundle rename sync", () => {
     expect(noticeMessages()).toEqual([]);
   });
 
+  it("renames a minimal bundle folder when its main markdown file is renamed in place", async () => {
+    const main = fakeFile("Notes/Project/New Project.md");
+    const bundleFolder = fakeFolder("Notes/Project", [main]);
+    const vault = new FakeVault([bundleFolder]);
+    const plugin = fakePlugin(vault);
+
+    await handleVaultRename(plugin, main, "Notes/Project/Project.md");
+
+    expect(vault.renameCalls).toEqual([{
+      source: "Notes/Project",
+      target: "Notes/New Project"
+    }]);
+    expect(bundleFolder.path).toBe("Notes/New Project");
+    expect(main.path).toBe("Notes/New Project/New Project.md");
+    expect(noticeMessages()).toEqual([]);
+  });
+
   it("does not rename folders for ordinary markdown file renames", async () => {
     const note = fakeFile("Notes/New.md");
     const folder = fakeFolder("Notes", [note]);
@@ -185,6 +202,39 @@ describe("bundle rename sync", () => {
     expect(main.path).toBe("Notes/New Project/New Project.md");
     expect(bundleFolder.path).toBe("Notes/New Project");
     expect(noticeMessages()).toEqual([]);
+  });
+
+  it("keeps renaming the main markdown file when a minimal bundle folder is renamed", async () => {
+    const main = fakeFile("Notes/New Project/Project.md");
+    const bundleFolder = fakeFolder("Notes/New Project", [main]);
+    const vault = new FakeVault([bundleFolder]);
+    const plugin = fakePlugin(vault);
+
+    await handleVaultRename(plugin, bundleFolder, "Notes/Project");
+
+    expect(vault.renameCalls).toEqual([{
+      source: "Notes/New Project/Project.md",
+      target: "Notes/New Project/New Project.md"
+    }]);
+    expect(main.path).toBe("Notes/New Project/New Project.md");
+    expect(bundleFolder.path).toBe("Notes/New Project");
+    expect(noticeMessages()).toEqual([]);
+  });
+});
+
+describe("plugin bundle recognition", () => {
+  it("recognizes a folder with only a same-name markdown file as a bundle", () => {
+    const main = fakeFile("Notes/Project/Project.md");
+    const bundleFolder = fakeFolder("Notes/Project", [main]);
+    const vault = new FakeVault([bundleFolder]);
+    const plugin = fakePlugin(vault);
+
+    expect(plugin.getBundleInfoForFile(main)).toEqual({
+      folderPath: "Notes/Project",
+      folderName: "Project",
+      mainFilePath: "Notes/Project/Project.md",
+      assetsFolderPath: "Notes/Project/assets"
+    });
   });
 });
 

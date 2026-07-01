@@ -96,6 +96,26 @@ describe("Obsidian attachment handlers", () => {
     expect(editor.inserted).toBe("![](./assets/shot.png)");
   });
 
+  it("creates the assets folder when pasting into a bundle that only has its main markdown file", async () => {
+    const vault = new FakeVault();
+    vault.addFolder("Project");
+    vault.addFile("Project/Project.md");
+    const editor = new FakeEditor();
+    const event = fakePasteEvent([new File(["image"], "shot.png", { type: "image/png" })]);
+
+    await handlePaste(
+      fakePlugin(vault),
+      event as unknown as ClipboardEvent,
+      editor as unknown as Editor,
+      fakeView("Project/Project.md") as unknown as MarkdownView
+    );
+
+    expect(event.prevented).toBe(true);
+    expect(vault.folders.has("Project/assets")).toBe(true);
+    expect(vault.files.has("Project/assets/shot.png")).toBe(true);
+    expect(editor.inserted).toBe("![](./assets/shot.png)");
+  });
+
   it("does not intercept pasted files when another handler already prevented default behavior", async () => {
     const vault = new FakeVault();
     vault.addFolder("Project");
@@ -308,12 +328,15 @@ function fakePlugin(
       const folderName = basename(folderPath);
       const mainFileName = `${folderName}.md`;
       const children = vault.directChildren(folderPath);
+      const hasMainFile = children.some((child) => child.name === mainFileName && child.type === "file");
+      const assetsChild = children.find((child) => child.name === "assets");
+      const hasOnlyBundleChildren = children.every((child) => child.name === mainFileName || child.name === "assets");
       const isBundle = file.extension === "md"
         && folderPath.length > 0
         && file.name === mainFileName
-        && children.length === 2
-        && children.some((child) => child.name === mainFileName && child.type === "file")
-        && children.some((child) => child.name === "assets" && child.type === "folder");
+        && hasMainFile
+        && hasOnlyBundleChildren
+        && (!assetsChild || assetsChild.type === "folder");
 
       if (!isBundle) {
         return null;

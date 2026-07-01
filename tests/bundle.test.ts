@@ -29,8 +29,12 @@ describe("bundle model", () => {
     ])).toBe(true);
   });
 
-  it("rejects folders missing assets", () => {
-    expect(isBundleFolderSnapshot("Work/Meeting", ["Meeting.md"])).toBe(false);
+  it("recognizes folders with only a same-name markdown file", () => {
+    expect(isBundleFolderSnapshot("Work/Meeting", ["Meeting.md"])).toBe(true);
+  });
+
+  it("rejects folders missing the same-name markdown file", () => {
+    expect(isBundleFolderSnapshot("Work/Meeting", ["assets"])).toBe(false);
   });
 
   it("rejects folders with extra direct children", () => {

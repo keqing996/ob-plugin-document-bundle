@@ -11,7 +11,7 @@ Documents Bundle brings that same low-friction feeling to Obsidian. Each Markdow
 ```text
 Project Brief/
   Project Brief.md
-  assets/
+  assets/        # optional until attachments are added
 ```
 
 Paste an image, drop a PDF, migrate an old local attachment link, and the file lands next to the note instead of wandering off into a vault-wide attachments folder. It feels page-native, but stays plain, portable, and easy to inspect.
@@ -46,7 +46,7 @@ Document/
     brief.pdf
 ```
 
-No database. No custom archive format. No lock-in. If the plugin is disabled, the folder is still just a folder.
+No database. No custom archive format. No lock-in. If the plugin is disabled, the folder is still just a folder. A folder with only `Document.md` is already a bundle; if `assets/` is missing, it appears when attachments are added.
 
 ## Usage
 
