@@ -52,9 +52,9 @@ No database. No custom archive format. No lock-in. If the plugin is disabled, th
 
 ### Create a Bundle
 
-In Obsidian's Files pane, right-click a folder and choose **New bundle document here**.
+In Obsidian's Files pane, right-click a folder, choose **New bundle document here**, and name the note.
 
-The plugin creates an untitled bundle. Rename the bundle folder directly in the Files pane, and Documents Bundle keeps the main Markdown file name in sync.
+![Create Study Notes from a folder’s context menu](images/create-bundle.gif)
 
 ```text
 Project Brief/
@@ -68,6 +68,8 @@ Right-click a Markdown file in the Files pane and choose **Convert to bundle**.
 
 The plugin previews any local attachments that will be moved, asks for confirmation, then moves the note into a same-named folder, creates `assets/`, migrates those attachments into the bundle, and rewrites their links.
 
+![Convert My Life into a bundle and move its image into assets](images/convert-note.gif)
+
 ### Paste or Drop Attachments
 
 When the active editor is a bundle's main document, pasted and dropped files are saved into that bundle's `assets/` folder.
@@ -78,6 +80,14 @@ When the active editor is a bundle's main document, pasted and dropped files are
 ```
 
 Normal notes are left alone. If the current file is not a bundle main document, Obsidian handles paste and drop as usual.
+
+![Paste a cover image and find it in the note’s assets folder](images/paste-attachment.gif)
+
+### Rename a Bundle
+
+Rename the note from its inline title or the Files pane. The folder and note take the same name. Links to local attachments keep their `./assets/` paths, and links from other notes update automatically without a confirmation prompt.
+
+![Rename My Study and watch its link update in Reading List](images/rename-bundle.gif)
 
 ### Migrate Existing Attachments
 

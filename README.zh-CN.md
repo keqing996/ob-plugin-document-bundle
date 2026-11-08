@@ -52,9 +52,9 @@ Document/
 
 ### 创建文档包
 
-在 Obsidian 的文件列表中，右键一个文件夹，选择 **New bundle document here**。
+在 Obsidian 的文件列表中，右键一个文件夹，选择 **New bundle document here**，然后为笔记命名。
 
-插件会创建一个未命名文档包。你可以直接在文件列表里重命名这个文件夹，Documents Bundle 会让主 Markdown 文件名保持同步。
+![Create Study Notes from a folder’s context menu](images/create-bundle.gif)
 
 ```text
 Project Brief/
@@ -68,6 +68,8 @@ Project Brief/
 
 插件会先预览将要移动的本地附件并请求确认。确认后，它会把这篇笔记移动到同名文件夹里，创建 `assets/` 文件夹，将这些附件迁入文档包，并重写对应链接。
 
+![Convert My Life into a bundle and move its image into assets](images/convert-note.gif)
+
 ### 粘贴或拖入附件
 
 当当前编辑器打开的是文档包主文档时，粘贴和拖入的文件会被保存到这个文档包自己的 `assets/` 文件夹里。
@@ -78,6 +80,14 @@ Project Brief/
 ```
 
 普通笔记不会被接管。如果当前文件不是文档包主文档，粘贴和拖入行为会继续交给 Obsidian 自己处理。
+
+![Paste a cover image and find it in the note’s assets folder](images/paste-attachment.gif)
+
+### 重命名文档包
+
+在编辑器顶部修改文档名，或在文件列表中重命名文档包，文件夹和主文档都会同步改名。包内附件保留 `./assets/` 相对路径，其他笔记指向文档包的链接会自动更新，无需在弹窗中确认。
+
+![Rename My Study and watch its link update in Reading List](images/rename-bundle.gif)
 
 ### 迁移已有附件
 
