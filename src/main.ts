@@ -10,6 +10,7 @@ import { AttachmentMigrationModal } from "./obsidian/attachment-migration-modal"
 import { openAssetsFolderWithFallback } from "./obsidian/assets-folder";
 import { addBundleFolderMenuItems, addNormalFolderMenuItems, addNormalMarkdownMenuItems } from "./obsidian/file-menu";
 import { ObsidianBundleFileSystem } from "./obsidian/fs";
+import { BundleRename } from "./obsidian/bundle-rename";
 import { promptForNativeRename } from "./obsidian/native-rename";
 import { ConfirmModal } from "./obsidian/prompt-modal";
 import { DocumentsBundleSettingTab } from "./obsidian/settings-tab";
@@ -29,6 +30,7 @@ declare const require: (moduleName: "electron") => ElectronShellModule;
 export default class DocumentsBundlePlugin extends Plugin {
   settings: DocumentsBundleSettings = DEFAULT_SETTINGS;
   private fs!: ObsidianBundleFileSystem;
+  private bundleRename?: BundleRename;
   private nativeFileExplorerPatch: NativeFileExplorerPatch | null = null;
 
   t(key: TranslationKey, vars?: TranslationVars): string {
@@ -104,6 +106,13 @@ export default class DocumentsBundlePlugin extends Plugin {
     this.addSettingTab(new DocumentsBundleSettingTab(this.app, this));
 
     this.enableNativeFileExplorerPatch();
+
+    this.bundleRename = new BundleRename(
+      this.app,
+      (file) => this.getBundleInfoForFile(file) !== null,
+      this.t.bind(this)
+    );
+    this.register(this.bundleRename.install());
 
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       this.addFileMenuItems(menu, file);
@@ -237,14 +246,15 @@ export default class DocumentsBundlePlugin extends Plugin {
   }
 
   async renameBundleInline(folderPath: string): Promise<void> {
-    const folder = this.app.vault.getAbstractFileByPath(folderPath);
-    if (!(folder instanceof TFolder)) {
-      new Notice(this.t("notice.bundleMainFileNotFound", { path: joinVaultPath(folderPath, `${basename(folderPath)}.md`) }));
+    const { mainFilePath } = getBundleInfoFromFolderPath(folderPath, BUNDLE_ASSETS_FOLDER_NAME);
+    const main = this.app.vault.getFileByPath(mainFilePath);
+    if (!main) {
+      new Notice(this.t("notice.bundleMainFileNotFound", { path: mainFilePath }));
       return;
     }
 
     this.refreshNativeFileExplorerPatch();
-    if (!await promptForNativeRename(this.app, folder)) {
+    if (!await promptForNativeRename(this.app, main)) {
       new Notice(this.t("notice.nativeRenameUnavailable"));
     }
   }
@@ -484,6 +494,7 @@ export default class DocumentsBundlePlugin extends Plugin {
 
   private async handleVaultRename(file: TAbstractFile, oldPath: string): Promise<void> {
     try {
+      if (this.bundleRename?.isMoving(file)) return;
       if (file instanceof TFolder) {
         await this.syncRenamedBundleFolder(file, oldPath);
       } else if (file instanceof TFile) {

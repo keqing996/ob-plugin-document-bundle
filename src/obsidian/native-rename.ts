@@ -1,10 +1,10 @@
-import type { App, TAbstractFile } from "obsidian";
+import type { App, TFile } from "obsidian";
 
 interface FileManagerWithInlineRename {
-  promptForFileRename?(file: TAbstractFile): unknown;
+  promptForFileRename?(file: TFile): unknown;
 }
 
-export async function promptForNativeRename(app: App, file: TAbstractFile): Promise<boolean> {
+export async function promptForNativeRename(app: App, file: TFile): Promise<boolean> {
   const fileManager = app.fileManager as typeof app.fileManager & FileManagerWithInlineRename;
   if (typeof fileManager.promptForFileRename !== "function") {
     return false;

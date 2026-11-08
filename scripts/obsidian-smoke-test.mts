@@ -38,7 +38,8 @@ try {
     await client.send("Runtime.enable");
     await waitForPluginLoad(client);
     const result = await verifyPlugin(client);
-    console.log(JSON.stringify(result, null, 2));
+    const bundleRenames = await verifyBundleRenameLinks(client);
+    console.log(JSON.stringify({ ...result, bundleRenames }, null, 2));
   } finally {
     client.ws.close();
   }
@@ -155,7 +156,7 @@ async function evaluate(client: DevToolsClient, expression: string): Promise<any
   });
 
   if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text || JSON.stringify(result.exceptionDetails));
+    throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || JSON.stringify(result.exceptionDetails));
   }
 
   return result.result.value;
@@ -491,10 +492,73 @@ async function verifyPlugin(client: DevToolsClient): Promise<any> {
   assert(result.bundleRegistry.items.includes("Shared Attachment/Alpha"), "Bundle registry did not include nested Alpha bundle.");
   assert(result.bundleRegistry.openedAlpha, "Direct bundle open path did not open Alpha bundle main file.");
   assert(result.operations.postMutationScan.bundles === 5, `Expected 5 bundles after conversion operations, got ${result.operations.postMutationScan.bundles}.`);
-  assert(result.operations.postMutationScan.markdownFiles === 3, `Expected 3 normal markdown files after conversion operations, got ${result.operations.postMutationScan.markdownFiles}.`);
+  const expectedNotes = result.scan.markdownFiles - 1 + result.reportFiles.length;
+  assert(result.operations.postMutationScan.markdownFiles === expectedNotes, `Expected ${expectedNotes} normal markdown files after conversion and report creation, got ${result.operations.postMutationScan.markdownFiles}.`);
   assert(result.operations.postMutationScan.incompleteCandidates === 0, `Expected 0 incomplete candidates after operations, got ${result.operations.postMutationScan.incompleteCandidates}.`);
 
   return result;
+}
+
+async function verifyBundleRenameLinks(client: DevToolsClient): Promise<unknown> {
+  return evaluate(client, `(async () => {
+    const { vault, fileManager, metadataCache } = app;
+    const root = 'Rename links';
+    const old = root + '/Before';
+    const image = 'assets/nested/same image.png';
+    const portable = '![caption](./assets/nested/same%20image.png "title")';
+    const noteText = '# Heading\\n\\n' + portable;
+    const indexText = '[[' + old + '/Before#Heading|Alias]]\\n\\n[Image](' + old.replace(' ', '%20') + '/assets/nested/same%20image.png)';
+    const check = (ok, message) => { if (!ok) throw Error(message); };
+    const indexed = () => new Promise(resolve => metadataCache.onCleanCache(resolve));
+    await vault.createFolder(old + '/assets/nested');
+    await vault.createFolder(root + '/Other');
+    await vault.createBinary(root + '/Other/same image.png', new ArrayBuffer(1));
+    const attachment = await vault.createBinary(old + '/' + image, new ArrayBuffer(2));
+    const main = await vault.create(old + '/Before.md', noteText);
+    const folder = main.parent;
+    const index = await vault.create(root + '/Index.md', indexText);
+    await indexed();
+    check(!vault.getConfig('alwaysUpdateLinks'), 'This fixture must normally prompt to update links.');
+    const checkIndex = () => {
+      const embed = metadataCache.getFileCache(main).embeds[0];
+      check(metadataCache.getFirstLinkpathDest(embed.link, main.path) === attachment, 'Embedded the wrong same-name attachment.');
+      const refs = metadataCache.getFileCache(index).links;
+      const targets = refs.map(ref => metadataCache.getFirstLinkpathDest(ref.link.split('#')[0], index.path));
+      check(targets[0] === main && targets[1] === attachment, 'Index links resolved to the wrong files.');
+      check(refs[0].original.includes('#Heading|Alias'), 'Lost heading or alias in backlink.');
+    };
+    checkIndex();
+    let conflict;
+    try {
+      await fileManager.renameFile(main, old + '/Other.md');
+    } catch (error) {
+      conflict = error;
+    }
+    check(conflict && main.path === old + '/Before.md' && folder.path === old, 'Conflicting rename split the bundle.');
+    for (const [entry, name] of [[main, 'From title'], [folder, 'From explorer']]) {
+      const before = folder.path;
+      const target = entry === main ? before + '/' + name + '.md' : root + '/' + name;
+      let timeout;
+      try {
+        await Promise.race([
+          fileManager.renameFile(entry, target),
+          new Promise((_, reject) => {
+            timeout = window.setTimeout(() => reject(Error('Bundle rename blocked: ' + document.querySelector('.modal')?.innerText)), 8000);
+          })
+        ]);
+      } finally {
+        window.clearTimeout(timeout);
+      }
+      await indexed();
+      check(folder.path === root + '/' + name && main.path === folder.path + '/' + name + '.md', 'Bundle names diverged.');
+      check(!await vault.adapter.exists(before), 'Original folder left on disk.');
+      check(await vault.read(main) === noteText, 'Portable attachment link or surrounding markup changed.');
+      check(attachment.path === folder.path + '/' + image, 'Attachment path changed.');
+      checkIndex();
+      check(!vault.getConfig('alwaysUpdateLinks'), 'Bundle rename changed global link settings.');
+    }
+    return { main: main.path, attachment: attachment.path };
+  })()`);
 }
 
 function assert(condition: unknown, message: string): asserts condition {
